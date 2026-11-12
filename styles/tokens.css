@@ -1,0 +1,89 @@
+/* ==========================================================================
+   Broadcast Design Tokens — Sports Command Center
+   Dark-first studio broadcast theme with optional high-contrast light mode.
+   ========================================================================== */
+
+:root {
+  /* Core Surfaces */
+  --bg-canvas: #070a11;
+  --bg-shell: #0b101b;
+  --bg-surface: #101726;
+  --bg-surface-elevated: #161f33;
+  --bg-surface-hover: #1b263d;
+  --bg-ticker: #090d16;
+
+  /* Borders & Hairlines */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.24);
+
+  /* Typography */
+  --text-primary: #f3f6fc;
+  --text-secondary: #9aa7bd;
+  --text-muted: #68768f;
+  --text-inverse: #070a11;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Bahnschrift", "DIN Alternate", "Arial Narrow", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  /* Semantic Sport & Broadcast Accents */
+  --accent-live: #ef4444;
+  --accent-live-glow: rgba(239, 68, 68, 0.28);
+
+  --sport-football: #10b981;
+  --sport-football-soft: rgba(16, 185, 129, 0.14);
+  --sport-football-border: rgba(16, 185, 129, 0.35);
+
+  --sport-cricket: #38bdf8;
+  --sport-cricket-soft: rgba(56, 189, 248, 0.14);
+  --sport-cricket-border: rgba(56, 189, 248, 0.35);
+
+  --sport-f1: #f43f5e;
+  --sport-f1-soft: rgba(244, 63, 94, 0.14);
+  --sport-f1-border: rgba(244, 63, 94, 0.35);
+
+  --f1-purple: #a855f7;
+  --f1-purple-soft: rgba(168, 85, 247, 0.18);
+
+  --status-gold: #f59e0b;
+  --status-gold-soft: rgba(245, 158, 11, 0.16);
+  --status-green: #22c55e;
+  --status-yellow: #eab308;
+  --status-red: #ef4444;
+
+  /* Spacing & Sizing */
+  --header-height: 58px;
+  --ticker-height: 46px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Shadows */
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.65);
+
+  /* Transitions */
+  --ease-ui: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-theme="light"] {
+  --bg-canvas: #eef2f7;
+  --bg-shell: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f5f7fb;
+  --bg-surface-hover: #eaeff7;
+  --bg-ticker: #0d1320;
+
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-medium: rgba(15, 23, 42, 0.15);
+  --border-strong: rgba(15, 23, 42, 0.28);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  --shadow-card: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.25);
+}

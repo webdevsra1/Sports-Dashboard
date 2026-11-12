@@ -1,0 +1,1687 @@
+/* ==========================================================================
+   Broadcast Components — Football, Cricket, F1, Ticker & Inspector Modal
+   ========================================================================== */
+
+/* Shared Badges & Chips */
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  appearance: none;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.16s var(--ease-ui);
+}
+
+.filter-pill:hover {
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.filter-pill.is-active {
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  border-color: transparent;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.status-badge.is-live {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.36);
+}
+
+.status-badge.is-ht {
+  background: var(--status-gold-soft);
+  color: var(--status-gold);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.status-badge.is-ft {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.status-badge.is-pre {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--sport-cricket);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* Goal / Wicket / Update Flash Animation */
+@keyframes scoreFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.65), inset 0 0 0 1px rgba(16, 185, 129, 0.9);
+    background-color: rgba(16, 185, 129, 0.18);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0), inset 0 0 0 1px var(--border-subtle);
+    background-color: var(--bg-surface);
+  }
+}
+
+.is-flashing {
+  animation: scoreFlash 1.6s ease-out;
+}
+
+/* Team Crest Emblem */
+.team-crest {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.team-crest.is-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.team-crest img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+/* ==========================================================================
+   FOOTBALL / SOCCER COMPONENTS
+   ========================================================================== */
+
+.football-hero-card {
+  background: linear-gradient(160deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-ui), transform 0.18s var(--ease-ui);
+}
+
+.football-hero-card:hover {
+  border-color: var(--sport-football-border);
+}
+
+.hero-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.league-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sport-football);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hero-team.is-away {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.hero-team-info {
+  min-width: 0;
+}
+
+.hero-team-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hero-team-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hero-score-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+}
+
+.hero-score-digits {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-sep {
+  color: var(--text-muted);
+  font-size: 22px;
+}
+
+.hero-clock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sport-football);
+}
+
+/* Goal Scorers & Match Events Strip */
+.hero-scorers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.scorers-col.is-away {
+  text-align: right;
+}
+
+.scorer-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.5;
+}
+
+.scorers-col.is-away .scorer-line {
+  justify-content: flex-end;
+}
+
+/* Compact Live Stats Comparison Bars */
+.stats-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.stat-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-mini-head {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.stat-mini-label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.stat-bar-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  display: flex;
+}
+
+[data-theme="light"] .stat-bar-track {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.stat-bar-home {
+  background: var(--sport-football);
+  height: 100%;
+  transition: width 0.35s var(--ease-ui);
+}
+
+.stat-bar-away {
+  background: #38bdf8;
+  height: 100%;
+  transition: width 0.35s var(--ease-ui);
+}
+
+/* Football Fixtures Grid */
+.football-matches-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.match-row-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  cursor: pointer;
+  transition: background 0.16s var(--ease-ui), border-color 0.16s var(--ease-ui);
+}
+
+.match-row-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-medium);
+}
+
+.match-row-card.is-featured {
+  border-color: var(--sport-football-border);
+  background: linear-gradient(90deg, var(--sport-football-soft), var(--bg-surface) 35%);
+}
+
+.match-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.match-row-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.match-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.match-side.is-away {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.match-side-name {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-side-cards {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.card-pip {
+  width: 6px;
+  height: 9px;
+  border-radius: 1.5px;
+  display: inline-block;
+}
+
+.card-pip.is-red {
+  background: #ef4444;
+}
+
+.card-pip.is-yellow {
+  background: #eab308;
+}
+
+.match-score-pill {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 7px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  min-width: 62px;
+  text-align: center;
+}
+
+.match-latest-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   CRICKET COMPONENTS
+   ========================================================================== */
+
+.cricket-layout-split {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cricket-hero {
+  background: linear-gradient(160deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  cursor: pointer;
+}
+
+.cricket-hero:hover {
+  border-color: var(--sport-cricket-border);
+}
+
+.cricket-format-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--sport-cricket-soft);
+  color: var(--sport-cricket);
+  border: 1px solid var(--sport-cricket-border);
+  text-transform: uppercase;
+}
+
+.cricket-innings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cricket-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+}
+
+.cricket-team-row.is-batting {
+  border-color: var(--sport-cricket-border);
+}
+
+.cricket-team-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cricket-team-code {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cricket-batting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sport-cricket);
+}
+
+.cricket-score-main {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cricket-overs {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.cricket-equation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--sport-cricket-soft);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cricket-rates {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--sport-cricket);
+  white-space: nowrap;
+}
+
+/* Batters & Bowler Mini Table */
+.cricket-players-box {
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cricket-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.cricket-mini-table th {
+  text-align: right;
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cricket-mini-table th:first-child {
+  text-align: left;
+}
+
+.cricket-mini-table td {
+  padding: 6px 8px;
+  text-align: right;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cricket-mini-table td:first-child {
+  text-align: left;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cricket-mini-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.striker-mark {
+  color: var(--sport-cricket);
+  margin-left: 3px;
+  font-weight: 800;
+}
+
+/* Recent Balls Strip */
+.recent-balls-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recent-balls-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.recent-balls-list {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.ball-pill {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+}
+
+.ball-pill.is-four {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+
+.ball-pill.is-six {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.ball-pill.is-wicket {
+  background: rgba(239, 68, 68, 0.24);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.cricket-other-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cricket-mini-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition: all 0.16s var(--ease-ui);
+}
+
+.cricket-mini-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-medium);
+}
+
+.cricket-mini-card.is-selected {
+  border-color: var(--sport-cricket-border);
+}
+
+/* ==========================================================================
+   FORMULA 1 COMPONENTS — TIMING TOWER & TRACK TELEMETRY
+   ========================================================================== */
+
+.f1-header-card {
+  background: linear-gradient(155deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.f1-gp-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.f1-gp-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.f1-gp-circuit {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.track-flag-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border-radius: 5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.track-flag-pill.is-green {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.track-flag-pill.is-yellow,
+.track-flag-pill.is-vsc,
+.track-flag-pill.is-sc {
+  background: rgba(234, 179, 8, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.45);
+}
+
+.track-flag-pill.is-red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.f1-lap-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.f1-lap-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.f1-progress-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.f1-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--sport-f1), #fb7185);
+  transition: width 0.4s var(--ease-ui);
+}
+
+.f1-telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.f1-tele-chip {
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.f1-tele-k {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.f1-tele-v {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+/* Timing Tower */
+.f1-tower-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.f1-tower-head,
+.f1-tower-row {
+  display: grid;
+  grid-template-columns: 28px 18px minmax(64px, 1fr) 68px 72px 38px 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.f1-tower-head {
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.f1-tower-row {
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.f1-tower-row:last-child {
+  border-bottom: 0;
+}
+
+.f1-tower-row:hover {
+  background: var(--bg-surface-hover);
+}
+
+.f1-tower-row.is-fastest {
+  background: linear-gradient(90deg, var(--f1-purple-soft), transparent 65%);
+}
+
+.f1-pos {
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.f1-delta {
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.f1-delta.is-up {
+  color: #4ade80;
+}
+
+.f1-delta.is-down {
+  color: #f87171;
+}
+
+.f1-delta.is-flat {
+  color: var(--text-muted);
+}
+
+.f1-driver-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.f1-team-bar {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.f1-driver-code {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.f1-driver-team {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.f1-gap {
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.f1-lap-time {
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.f1-lap-time.is-purple {
+  color: #d8b4fe;
+  font-weight: 800;
+}
+
+/* Pirelli Tyre Compound Badge */
+.tyre-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  border: 2px solid;
+}
+
+.tyre-pill.is-S {
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.tyre-pill.is-M {
+  border-color: #eab308;
+  color: #fde047;
+}
+
+.tyre-pill.is-H {
+  border-color: #e2e8f0;
+  color: #f8fafc;
+}
+
+.tyre-pill.is-I {
+  border-color: #22c55e;
+  color: #86efac;
+}
+
+.tyre-pill.is-W {
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+[data-theme="light"] .tyre-pill.is-H {
+  border-color: #334155;
+  color: #0f172a;
+}
+
+.f1-pits {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* ==========================================================================
+   TICKER ITEMS & BREAKING BANNER
+   ========================================================================== */
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  cursor: pointer;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  color: #e2e8f0;
+  transition: color 0.15s ease;
+}
+
+.ticker-item:hover {
+  color: #ffffff;
+}
+
+.ticker-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ticker-tag.is-football {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.ticker-tag.is-cricket {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.ticker-tag.is-f1 {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.45);
+}
+
+.ticker-tag.is-alert {
+  background: rgba(245, 158, 11, 0.24);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.ticker-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.ticker-text strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Breaking Flash Toast above Ticker */
+.breaking-toast {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--ticker-height) + 12px);
+  z-index: 65;
+  max-width: 390px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transform: translateY(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.28s var(--ease-ui);
+}
+
+.breaking-toast.is-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.breaking-toast-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fbbf24;
+  letter-spacing: 0.06em;
+}
+
+.breaking-toast-body {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   INSPECTOR MODAL
+   ========================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(4, 7, 13, 0.72);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.modal-backdrop.is-open {
+  display: flex;
+}
+
+.modal-dialog {
+  width: 100%;
+  max-width: 880px;
+  max-height: 88vh;
+  background: var(--bg-shell);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.modal-close {
+  appearance: none;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.timeline-min {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: var(--sport-football);
+  min-width: 38px;
+}
+
+.empty-state {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* Light-Theme High-Contrast Overrides */
+[data-theme="light"] .live-pill,
+[data-theme="light"] .status-badge.is-live {
+  color: #dc2626;
+}
+
+[data-theme="light"] .status-badge.is-ht {
+  color: #b45309;
+}
+
+[data-theme="light"] .ball-pill.is-four {
+  color: #0369a1;
+}
+
+[data-theme="light"] .ball-pill.is-six {
+  color: #b45309;
+}
+
+[data-theme="light"] .ball-pill.is-wicket {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .f1-lap-time.is-purple {
+  color: #7e22ce;
+}
+
+[data-theme="light"] .tyre-pill.is-S {
+  color: #dc2626;
+}
+
+[data-theme="light"] .tyre-pill.is-M {
+  color: #a16207;
+}
+
+[data-theme="light"] .tyre-pill.is-I {
+  color: #15803d;
+}
+
+[data-theme="light"] .tyre-pill.is-W {
+  color: #1d4ed8;
+}
+
+/* Mobile Compact Adjustments */
+@media (max-width: 520px) {
+  .f1-tower-head,
+  .f1-tower-row {
+    grid-template-columns: 22px 14px minmax(42px, 1fr) 56px 60px 34px 20px;
+    gap: 4px;
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  .f1-driver-team {
+    display: none;
+  }
+
+  .hero-score-digits {
+    font-size: 24px;
+  }
+}
+
+/* ==========================================================================
+   DETAILED MATCH MODAL — FOOTBALL PLAYING FORMAT / SUBS & CRICKET SQUADS
+   ========================================================================== */
+
+.modal-section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fb-lineups-grid,
+.cr-squads-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.squad-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.squad-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.squad-team-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.formation-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--sport-football);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+/* Football Formation Pitch */
+.fb-pitch {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background:
+    linear-gradient(180deg, rgba(16, 185, 129, 0.13) 0%, rgba(16, 185, 129, 0.05) 50%, rgba(16, 185, 129, 0.13) 100%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 24px, transparent 24px 48px);
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.fb-pitch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  gap: 4px;
+}
+
+.fb-pitch-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.fb-pitch-jersey {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.fb-pitch-node.is-subbed-out .fb-pitch-jersey {
+  opacity: 0.72;
+  border-color: #f59e0b;
+}
+
+.fb-pitch-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 74px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-pitch-syms {
+  font-size: 10px;
+  line-height: 1.1;
+  min-height: 12px;
+}
+
+.squad-sub-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.fb-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fb-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+}
+
+.fb-player-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fb-num-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: right;
+}
+
+.fb-pos-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  min-width: 24px;
+  text-align: center;
+}
+
+.fb-player-name-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fb-player-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-swap-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-player-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.stat-sym-group {
+  font-size: 12px;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.sub-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.sub-badge.is-out {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.38);
+}
+
+.sub-badge.is-in {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.38);
+}
+
+.sub-badge.is-bench {
+  background: var(--bg-surface-elevated);
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .sub-badge.is-out {
+  color: #b45309;
+}
+
+[data-theme="light"] .sub-badge.is-in {
+  color: #047857;
+}
+
+/* Cricket Scorecard & Batting Order Squads inside Modal */
+.cr-innings-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cr-innings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cr-table-scroll {
+  overflow-x: auto;
+}
+
+.cr-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.cr-detail-table th {
+  text-align: right;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.cr-detail-table th:first-child,
+.cr-detail-table th.is-left {
+  text-align: left;
+}
+
+.cr-detail-table td {
+  padding: 6px 8px;
+  text-align: right;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.cr-detail-table td:first-child,
+.cr-detail-table td.is-left {
+  text-align: left;
+  font-family: var(--font-sans);
+  white-space: normal;
+}
+
+.cr-detail-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.cr-detail-table tr.is-not-out td:first-child strong {
+  color: var(--sport-cricket);
+}
+
+.cr-dismissal-cell {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.cr-squad-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+}
+
+.cr-squad-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   SPLIT LIVE VS PREVIOUS MATCHES BELOW SPOTLIGHT
+   ========================================================================== */
+
+.matches-split-sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.match-split-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+}
+
+.match-split-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.match-split-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+.match-split-title.is-live-title {
+  color: var(--sport-football);
+}
+
+.panel-cricket .match-split-title.is-live-title {
+  color: var(--sport-cricket);
+}
+
+.match-split-title.is-prev-title {
+  color: var(--text-secondary);
+}
+
+.match-split-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.match-split-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 265px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.empty-state.is-compact {
+  padding: 13px 10px;
+  font-size: 11px;
+}
+
+.cr-mini-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cr-mini-details-btn {
+  appearance: none;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  color: var(--sport-cricket);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.16s var(--ease-ui), background 0.16s var(--ease-ui);
+}
+
+.cr-mini-details-btn:hover {
+  border-color: var(--sport-cricket-border);
+  background: var(--sport-cricket-soft);
+}

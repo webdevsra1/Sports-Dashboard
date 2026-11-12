@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sports Dashboard — Live Football, Cricket &amp; F1</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Broadcast Command Bar -->
+    <header class="command-header">
+      <div class="brand-group">
+        <div class="brand-mark" aria-hidden="true">SD</div>
+        <div class="brand-titles">
+          <div class="brand-name">
+            Sports Dashboard
+            <span class="live-pill">
+              <span class="live-dot"></span>
+              LIVE
+            </span>
+          </div>
+          <div class="brand-sub">Single-Point Broadcast Desk • Football • Cricket • Formula 1</div>
+        </div>
+      </div>
+
+      <!-- Unified / Focused Sport Switcher -->
+      <nav class="sport-nav" aria-label="Sport view selector">
+        <button type="button" class="sport-tab is-active" data-sport-tab="all">
+          All Sports
+        </button>
+        <button type="button" class="sport-tab" data-sport-tab="football" data-sport="football">
+          ⚽ Football
+          <span class="tab-count tabular" id="tab-count-football">0</span>
+        </button>
+        <button type="button" class="sport-tab" data-sport-tab="cricket" data-sport="cricket">
+          🏏 Cricket
+          <span class="tab-count tabular" id="tab-count-cricket">0</span>
+        </button>
+        <button type="button" class="sport-tab" data-sport-tab="f1" data-sport="f1">
+          🏎️ Formula 1
+          <span class="tab-count tabular" id="tab-count-f1">GP</span>
+        </button>
+      </nav>
+
+      <!-- Live Sync, Settings, Theme & Clock -->
+      <div class="header-controls">
+        <button type="button" class="icon-btn" id="sync-now-btn" title="Refresh live feeds now">
+          ↻ Sync
+        </button>
+
+        <button type="button" class="icon-btn" id="feed-settings-btn" title="Live feed diagnostics &amp; API settings">
+          ⚙ Feeds
+        </button>
+
+        <button type="button" class="icon-btn" id="theme-toggle-btn" title="Toggle Dark/Light broadcast theme">
+          ☀ Light
+        </button>
+
+        <div class="clock-readout">
+          <span class="clock-time tabular" id="header-clock-time">--:--:--</span>
+          <span class="clock-status" id="feed-status-label">SYNCING...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Unified 3-Sport Broadcast Grid -->
+    <main class="dashboard-main" id="dashboard-main">
+      <!-- Football / Soccer Panel (Primary Anchor) -->
+      <section class="sport-panel panel-football" id="panel-football" aria-labelledby="heading-football">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="12 7 16 10 14.5 15 9.5 15 8 10"></polygon>
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel-title" id="heading-football">Football / Soccer Live</h2>
+              <div class="panel-meta" id="football-panel-meta">Loading matches...</div>
+            </div>
+          </div>
+          <span class="status-badge is-live"><span class="live-dot"></span>SCORES</span>
+        </div>
+        <div class="panel-body" id="football-panel-body"></div>
+      </section>
+
+      <!-- Cricket Panel -->
+      <section class="sport-panel panel-cricket" id="panel-cricket" aria-labelledby="heading-cricket">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="6" y1="18" x2="18" y2="6"></line>
+                <rect x="14" y="3" width="5" height="7" rx="1" transform="rotate(45 16.5 6.5)"></rect>
+                <circle cx="6" cy="8" r="2.2"></circle>
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel-title" id="heading-cricket">Cricket Center</h2>
+              <div class="panel-meta" id="cricket-panel-meta">Loading fixtures...</div>
+            </div>
+          </div>
+          <span class="status-badge is-pre">SCORECARD</span>
+        </div>
+        <div class="panel-body" id="cricket-panel-body"></div>
+      </section>
+
+      <!-- Formula 1 Panel -->
+      <section class="sport-panel panel-f1" id="panel-f1" aria-labelledby="heading-f1">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 15h16l-2-4H7l-3 4z"></path>
+                <circle cx="7.5" cy="17" r="2"></circle>
+                <circle cx="16.5" cy="17" r="2"></circle>
+                <path d="M10 11V8h5"></path>
+              </svg>
+            </span>
+            <div>
+              <h2 class="panel-title" id="heading-f1">Formula 1 Timing</h2>
+              <div class="panel-meta" id="f1-panel-meta">Loading session...</div>
+            </div>
+          </div>
+          <span class="status-badge is-live"><span class="live-dot"></span>TIMING</span>
+        </div>
+        <div class="panel-body" id="f1-panel-body"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Breaking Event Toast Notification -->
+  <aside class="breaking-toast" id="breaking-toast" role="status" aria-live="polite" style="cursor:pointer;">
+    <div>
+      <div class="breaking-toast-label" id="breaking-toast-label">BREAKING UPDATE</div>
+      <div class="breaking-toast-body" id="breaking-toast-body"></div>
+    </div>
+  </aside>
+
+  <!-- Pinned Bottom Scrolling Important Match Updates Ticker -->
+  <footer class="bottom-ticker" id="bottom-ticker" aria-label="Live scrolling match updates">
+    <div class="ticker-lead">
+      <span class="live-dot" style="background:#ffffff"></span>
+      <span>LIVE UPDATES</span>
+    </div>
+
+    <div class="ticker-viewport">
+      <div class="ticker-track" id="ticker-track"></div>
+    </div>
+
+    <div class="ticker-controls">
+      <button type="button" class="ticker-ctrl-btn is-active" data-ticker-filter="all" title="Show all sports in ticker">ALL</button>
+      <button type="button" class="ticker-ctrl-btn" data-ticker-filter="football" title="Show Football updates only">⚽</button>
+      <button type="button" class="ticker-ctrl-btn" data-ticker-filter="cricket" title="Show Cricket updates only">🏏</button>
+      <button type="button" class="ticker-ctrl-btn" data-ticker-filter="f1" title="Show Formula 1 updates only">🏎️</button>
+      <button type="button" class="ticker-ctrl-btn" id="ticker-speed-btn" title="Cycle scroll speed">1x</button>
+      <button type="button" class="ticker-ctrl-btn" id="ticker-pause-btn" title="Pause/Resume scrolling ticker">❚❚ Pause</button>
+    </div>
+  </footer>
+
+  <!-- Match / Session Detail Inspector Modal -->
+  <div class="modal-backdrop" id="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Match Details</h3>
+        <button type="button" class="modal-close" id="modal-close-btn" aria-label="Close modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Classic defer scripts so dashboard works on http://localhost -->
+  <script defer src="js/utils.js"></script>
+  <script defer src="js/services/live-feed.js"></script>
+  <script defer src="js/renderers/football.js"></script>
+  <script defer src="js/renderers/cricket.js"></script>
+  <script defer src="js/renderers/f1.js"></script>
+  <script defer src="js/renderers/ticker.js"></script>
+  <script defer src="js/renderers/modal.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+</html>
