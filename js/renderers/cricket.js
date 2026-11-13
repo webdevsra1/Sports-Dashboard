@@ -10,12 +10,21 @@
   const Apex = (root.ApexSports = root.ApexSports || {});
 
   function renderBallPill(ball) {
-    const val = String(ball);
-    let cls = "ball-pill";
-    if (val === "4") cls += " is-four";
-    else if (val === "6") cls += " is-six";
-    else if (val.toUpperCase() === "W") cls += " is-wicket";
-    return `<span class="${cls}">${Apex.utils.escapeHtml(val === "0" ? "•" : val)}</span>`;
+    const isObj = ball && typeof ball === "object";
+    const raw = isObj ? String(ball.label ?? "0") : String(ball ?? "0");
+    const up = raw.toUpperCase();
+    let kind = isObj && ball.kind ? ball.kind : "";
+    if (!kind) {
+      if (up === "W" || up.includes("+W")) kind = "wicket";
+      else if (up === "6") kind = "six";
+      else if (up === "4") kind = "four";
+      else if (/WD|NB|LB|B$/i.test(up)) kind = "extra";
+      else if (up === "0" || up === "•") kind = "dot";
+      else kind = "run";
+    }
+    const label = raw === "•" ? "0" : raw;
+    const tooltip = isObj && ball.tooltip ? ` title="${Apex.utils.escapeHtml(ball.tooltip)}"` : "";
+    return `<span class="cricket-ball-circle is-${Apex.utils.escapeHtml(kind)}"${tooltip}>${Apex.utils.escapeHtml(label)}</span>`;
   }
 
   function renderCricketTeamRow(team) {
@@ -53,7 +62,10 @@
             .map(
               (b) => `
             <tr>
-              <td>${escapeHtml(b.name)}${b.striker ? `<span class="striker-mark">*</span>` : ""}</td>
+              <td>
+                <div>${escapeHtml(b.name)}${b.striker ? `<span class="striker-mark">*</span>` : ""}</div>
+                ${b.isOut && b.dismissal ? `<div class="cr-mini-dismissal">${escapeHtml(b.dismissal)}</div>` : ""}
+              </td>
               <td>${escapeHtml(b.runs)}</td>
               <td>${escapeHtml(b.balls)}</td>
               <td>${escapeHtml(b.fours)}</td>
@@ -170,16 +182,21 @@
     return `
       <article class="cricket-mini-card ${isSelected ? "is-selected" : ""}" data-select-cricket="${escapeHtml(match.id)}">
         <div class="match-row-meta">
-          <span><strong style="color:var(--sport-cricket)">${escapeHtml(match.format)}</strong> • ${escapeHtml(match.series)}</span>
+          <span class="cr-mini-series"><strong style="color:var(--sport-cricket)">${escapeHtml(match.format)}</strong> • ${escapeHtml(match.series)}</span>
           ${renderStatusBadge(match.status, match.clock)}
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;gap:6px;">
-          <span>${escapeHtml(match.team1.abbr)} ${escapeHtml(formatCricketScore(match.team1))}${t1Ov}</span>
-          <span style="color:var(--text-muted);font-size:10px;">vs</span>
-          <span>${escapeHtml(match.team2.abbr)} ${escapeHtml(formatCricketScore(match.team2))}${t2Ov}</span>
+        <div class="cr-mini-teams">
+          <div class="cr-mini-team-row">
+            <span class="cr-mini-team-abbr">${escapeHtml(match.team1.name || match.team1.abbr)}</span>
+            <span class="cr-mini-team-score tabular">${escapeHtml(formatCricketScore(match.team1))}${t1Ov}</span>
+          </div>
+          <div class="cr-mini-team-row">
+            <span class="cr-mini-team-abbr">${escapeHtml(match.team2.name || match.team2.abbr)}</span>
+            <span class="cr-mini-team-score tabular">${escapeHtml(formatCricketScore(match.team2))}${t2Ov}</span>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(match.equation)}</span>
+        <div class="cr-mini-foot">
+          <span class="cr-mini-eq">${escapeHtml(match.equation)}</span>
           <span class="cr-mini-actions">
             <button type="button" class="cr-mini-details-btn" data-open-modal="cricket" data-id="${escapeHtml(match.id)}" title="Open full scorecard &amp; squads">Scorecard →</button>
           </span>
@@ -240,7 +257,7 @@
 
             <div class="match-split-box">
               <div class="match-split-header">
-                <span class="match-split-title is-prev-title">Previous Matches (Men's Intl / IPL)</span>
+                <span class="match-split-title is-prev-title">Previous Matches</span>
                 <span class="match-split-count tabular">${previousMatches.length}</span>
               </div>
               <div class="match-split-list">${prevListHtml}</div>

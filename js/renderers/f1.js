@@ -24,6 +24,100 @@
     return `<span class="f1-delta is-flat">—</span>`;
   }
 
+  function formatF1Countdown(isoStr) {
+    if (!isoStr) return "UPCOMING";
+    const ts = Date.parse(isoStr);
+    if (Number.isNaN(ts)) return "UPCOMING";
+    const diffMs = ts - Date.now();
+    if (diffMs <= 0 && diffMs >= -3 * 3600000) return "RACE LIVE";
+    if (diffMs < -3 * 3600000) return "COMPLETED";
+    const totalMins = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMins / (24 * 60));
+    const hours = Math.floor((totalMins % (24 * 60)) / 60);
+    const mins = totalMins % 60;
+    if (days >= 1) return `IN ${days}D ${hours}H`;
+    if (hours >= 1) return `IN ${hours}H ${mins}M`;
+    return `IN ${Math.max(1, mins)}M`;
+  }
+
+  function formatF1SessionClock(isoStr) {
+    if (!isoStr) return "TBD";
+    const dt = new Date(isoStr);
+    if (Number.isNaN(dt.getTime())) return "TBD";
+    const day = dt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    const tm = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${day} • ${tm}`;
+  }
+
+  function formatF1ChipTime(isoStr) {
+    if (!isoStr) return "TBD";
+    const dt = new Date(isoStr);
+    if (Number.isNaN(dt.getTime())) return "TBD";
+    const wd = dt.toLocaleDateString([], { weekday: "short" });
+    const tm = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${wd} ${tm}`;
+  }
+
+  function formatF1WeekendSpan(startIso, endIso) {
+    if (!startIso && !endIso) return "";
+    const s = startIso ? new Date(startIso) : null;
+    const e = endIso ? new Date(endIso) : null;
+    if (s && !Number.isNaN(s.getTime()) && e && !Number.isNaN(e.getTime())) {
+      const sText = s.toLocaleDateString([], { month: "short", day: "numeric" });
+      const eText = e.toLocaleDateString([], { month: "short", day: "numeric" });
+      return sText === eText ? sText : `${sText} – ${eText}`;
+    }
+    const valid = s && !Number.isNaN(s.getTime()) ? s : e;
+    return valid ? valid.toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+  }
+
+  function renderUpcomingF1Card(upcoming) {
+    if (!upcoming) return "";
+    const { escapeHtml } = Apex.utils;
+    const sessions = Array.isArray(upcoming.sessions) ? upcoming.sessions : [];
+    const nowMs = Date.now();
+    const nextIdx = sessions.findIndex((s) => s.ts >= nowMs - 3600000);
+    const countdown = formatF1Countdown(upcoming.raceDateIso);
+    const weekendSpan = formatF1WeekendSpan(upcoming.weekendStartIso, upcoming.raceDateIso);
+    const raceClock = formatF1SessionClock(upcoming.raceDateIso);
+
+    const sessionChipsHtml = sessions
+      .map((s, idx) => {
+        const isNext = idx === nextIdx;
+        const isPost = !isNext && (s.state === "post" || (s.ts && s.ts < nowMs - 2 * 3600000));
+        return `
+          <div class="f1-session-chip ${isNext ? "is-next" : ""} ${isPost ? "is-post" : ""}">
+            <span class="f1-session-lbl">${escapeHtml(s.label)}</span>
+            <span class="f1-session-time tabular">${escapeHtml(formatF1ChipTime(s.iso))}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `
+      <div class="f1-upcoming-card" data-open-modal="f1" data-id="f1-upcoming" title="Click for full Grand Prix weekend schedule & upcoming calendar">
+        <div class="f1-upcoming-top">
+          <div class="f1-upcoming-title-wrap">
+            <span class="f1-upcoming-tag">${upcoming.round ? `NEXT • R${escapeHtml(upcoming.round)}` : "NEXT RACE"}</span>
+            <span class="f1-upcoming-gp">${escapeHtml(upcoming.grandPrix)}</span>
+          </div>
+          <span class="f1-upcoming-countdown tabular">${escapeHtml(countdown)}</span>
+        </div>
+        <div class="f1-upcoming-meta">
+          <div class="f1-upcoming-row">
+            <span class="f1-upcoming-k">WHERE</span>
+            <span class="f1-upcoming-v">${escapeHtml(upcoming.circuit)} • ${escapeHtml(upcoming.location)}</span>
+          </div>
+          <div class="f1-upcoming-row">
+            <span class="f1-upcoming-k">WHEN</span>
+            <span class="f1-upcoming-v tabular">${weekendSpan ? `${escapeHtml(weekendSpan)} • ` : ""}Race: ${escapeHtml(raceClock)}</span>
+          </div>
+        </div>
+        ${sessions.length ? `<div class="f1-session-strip">${sessionChipsHtml}</div>` : ""}
+      </div>
+    `;
+  }
+
   function renderF1Panel(state) {
     const container = document.getElementById("f1-panel-body");
     const countEl = document.getElementById("f1-panel-meta");
@@ -37,13 +131,19 @@
 
     const { escapeHtml } = Apex.utils;
     if (countEl) {
-      countEl.textContent = f1.isPreviousResult
-        ? `Previous GP • ${f1.session}`
-        : `${f1.session} • Lap ${f1.lap}/${f1.totalLaps}`;
+      if (f1.isPreviousResult && f1.upcomingRace) {
+        countEl.textContent = `Next: ${f1.upcomingRace.grandPrix} • ${f1.session}`;
+      } else {
+        countEl.textContent = f1.isPreviousResult
+          ? `Previous GP • ${f1.session}`
+          : `${f1.session} • Lap ${f1.lap}/${f1.totalLaps}`;
+      }
     }
 
     const flag = getTrackFlagInfo(f1.trackStatus);
     const lapPct = Math.min(100, Math.round((f1.lap / Math.max(1, f1.totalLaps)) * 100));
+    const upcomingCardHtml = renderUpcomingF1Card(f1.upcomingRace);
+    const hasDrivers = Array.isArray(f1.drivers) && f1.drivers.length > 0;
 
     const rowsHtml = (f1.drivers || [])
       .map((d) => {
@@ -76,7 +176,26 @@
       .map((n) => `<div style="font-size:11px;color:var(--text-secondary);line-height:1.35;">• ${escapeHtml(n)}</div>`)
       .join("");
 
+    const towerHtml = hasDrivers
+      ? `
+        <div class="f1-tower-wrap">
+          <div class="f1-tower-head">
+            <span>Pos</span>
+            <span></span>
+            <span>Driver</span>
+            <span style="text-align:right">Gap</span>
+            <span style="text-align:right">Last Lap</span>
+            <span style="text-align:center">Tyre</span>
+            <span style="text-align:center">Pit</span>
+          </div>
+          ${rowsHtml}
+        </div>
+      `
+      : "";
+
     container.innerHTML = `
+      ${upcomingCardHtml}
+
       <div class="f1-header-card" data-open-modal="f1" data-id="f1-gp" style="cursor:pointer;">
         <div class="f1-gp-top">
           <div>
@@ -110,18 +229,7 @@
         </div>
       </div>
 
-      <div class="f1-tower-wrap">
-        <div class="f1-tower-head">
-          <span>Pos</span>
-          <span></span>
-          <span>Driver</span>
-          <span style="text-align:right">Gap</span>
-          <span style="text-align:right">Last Lap</span>
-          <span style="text-align:center">Tyre</span>
-          <span style="text-align:center">Pit</span>
-        </div>
-        ${rowsHtml}
-      </div>
+      ${towerHtml}
 
       <div style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:9px 11px;display:flex;flex-direction:column;gap:4px;">
         <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--sport-f1);text-transform:uppercase;letter-spacing:0.05em;">

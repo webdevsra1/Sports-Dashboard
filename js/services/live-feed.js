@@ -23,8 +23,7 @@
     { code: "ger.1", key: "BUNDESLIGA", name: "Bundesliga" },
     { code: "fifa.worldq.uefa", key: "WCQ", name: "WC Qualifiers UEFA" },
     { code: "fifa.worldq.conmebol", key: "WCQ", name: "WC Qualifiers CONMEBOL" },
-    { code: "fifa.friendly", key: "INTL", name: "International Friendly" },
-    { code: "concacaf.nations", key: "INTL", name: "CONCACAF Nations League" }
+    { code: "fifa.friendly", key: "INTL", name: "International Friendly" }
   ];
 
   const TEAM_COLORS = {
@@ -101,16 +100,25 @@
     }
   }
 
-  async function fetchResource(proxyPath, directUrl, mode) {
+  function canDirectCorsFallback(directUrl) {
+    return /^https:\/\/(?:site(?:\.web)?\.api\.espn\.com|api\.openf1\.org|api\.jolpi\.ca)\//i.test(String(directUrl || ""));
+  }
+
+  async function fetchResource(proxyPath, directUrl, mode, options) {
     const useProxy = proxyAvailable === true && Boolean(proxyPath);
-    const urls = useProxy ? [proxyPath] : [directUrl];
+    const urls = useProxy
+      ? canDirectCorsFallback(directUrl)
+        ? [proxyPath, directUrl]
+        : [proxyPath]
+      : [directUrl];
+    const timeoutMs = (options && Number(options.timeoutMs)) || 8500;
     let lastError = null;
 
     for (const url of urls) {
       if (!url) continue;
       try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 7000);
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
         clearTimeout(timer);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -160,10 +168,27 @@
     return `${label} • ${shortDate}`;
   }
 
-  function getRecentUtcDateStrings(daysBack) {
+  const cricketDatePanelCache = new Map();
+  const CRICKET_EXTENDED_PANEL_TTL_MS = 15 * 60 * 1000;
+
+  function getUtcDateOffsetList(pastDays, futureDays) {
     const list = [];
     const now = new Date();
-    for (let d = 1; d <= daysBack; d += 1) {
+    for (let offset = futureDays; offset >= -pastDays; offset -= 1) {
+      const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset));
+      const yyyy = target.getUTCFullYear();
+      const mm = String(target.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(target.getUTCDate()).padStart(2, "0");
+      list.push({ date: `${yyyy}${mm}${dd}`, offset });
+    }
+    return list;
+  }
+
+  function getRecentUtcDateStrings(daysBack, includeTodayAndTomorrow) {
+    const list = [];
+    const now = new Date();
+    const start = includeTodayAndTomorrow ? -1 : 1;
+    for (let d = start; d <= daysBack; d += 1) {
       const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - d));
       const yyyy = target.getUTCFullYear();
       const mm = String(target.getUTCMonth() + 1).padStart(2, "0");
@@ -448,6 +473,8 @@
                 id: athId,
                 name: fullName,
                 shortName,
+                club: (r.team && (r.team.displayName || r.team.shortDisplayName || r.team.name)) || "",
+                headshot: (ath.headshot && ath.headshot.href) || "",
                 jersey: p.jersey ? String(p.jersey) : "",
                 pos: (p.position && (p.position.abbreviation || p.position.displayName)) || "",
                 formationPlace: parseInt(p.formationPlace, 10) || 99,
@@ -463,7 +490,11 @@
                 assistMinutes: assistMins,
                 ownGoals: getPlayerStat(p, "ownGoals"),
                 yellowCards: getPlayerStat(p, "yellowCards"),
-                redCards: getPlayerStat(p, "redCards")
+                redCards: getPlayerStat(p, "redCards"),
+                shots: getPlayerStat(p, "totalShots"),
+                shotsOnTarget: getPlayerStat(p, "shotsOnTarget"),
+                saves: getPlayerStat(p, "saves"),
+                foulsCommitted: getPlayerStat(p, "foulsCommitted")
               };
             });
 
@@ -741,7 +772,7 @@
     const classObj = comp.class || {};
 
     const mapped = mapStatus(comp.status);
-    const leagueId = String((leagueMeta && leagueMeta.id) || "");
+    const leagueId = String((leagueMeta && leagueMeta.id) || (ev && ev.league && ev.league.id) || "");
     const leagueName = String((leagueMeta && leagueMeta.name) || ev.name || "International Cricket");
     const rawFormat = String(classObj.generalClassCard || classObj.eventType || "CRICKET").toUpperCase();
     const isIpl = leagueId === "8048" || /\bindian premier league\b/i.test(leagueName);
@@ -829,6 +860,7 @@
         wickets: s1.wickets,
         scoreDisplay: s1.scoreDisplay,
         overs: s1.overs,
+        winner: Boolean(c1.winner),
         isBatting: mapped.status === "LIVE" && bat1
       },
       team2: {
@@ -842,6 +874,7 @@
         wickets: s2.wickets,
         scoreDisplay: s2.scoreDisplay,
         overs: s2.overs,
+        winner: Boolean(c2.winner),
         isBatting: mapped.status === "LIVE" && bat2
       },
       batters: [],
@@ -859,7 +892,7 @@
 
     if (payload && Array.isArray(payload.scores)) {
       payload.scores.forEach((group) => {
-        const lg = (group.leagues && group.leagues[0]) || {};
+        const lg = (group.leagues && group.leagues[0]) || group.league || {};
         if (lg.id) seenLeagueIds.add(String(lg.id));
         const evs = Array.isArray(group.events) ? group.events : [];
         evs.forEach((ev) => {
@@ -868,7 +901,7 @@
         });
       });
     } else if (payload && Array.isArray(payload.events)) {
-      const lg = (payload.leagues && payload.leagues[0]) || {};
+      const lg = (payload.leagues && payload.leagues[0]) || payload.league || {};
       if (lg.id) seenLeagueIds.add(String(lg.id));
       payload.events.forEach((ev) => {
         const parsed = buildEspnCricketMatch(ev, lg);
@@ -951,6 +984,148 @@
     return map;
   }
 
+  function extractDismissalSegment(rawShort, startRe, endRe) {
+    if (!rawShort || !startRe.test(rawShort)) return "";
+    let rest = rawShort.replace(startRe, "").trim();
+    if (endRe) {
+      const idx = rest.search(endRe);
+      if (idx !== -1) rest = rest.slice(0, idx).trim();
+    }
+    return rest;
+  }
+
+  function formatCricketDismissal(outDetails, batted, fallbackShort) {
+    if (!batted) {
+      return { isOut: false, notOut: false, text: "Yet to bat", fallText: "" };
+    }
+
+    const rawShort = cleanCricketEntityText((outDetails && outDetails.shortText) || fallbackShort || "");
+    const card = String((outDetails && outDetails.dismissalCard) || "").trim().toLowerCase();
+    const bowlerObj = outDetails && outDetails.bowler;
+    const bowlerId = bowlerObj && bowlerObj.id ? String(bowlerObj.id) : "";
+    const bowlerName = cleanCricketEntityText(
+      (bowlerObj && (bowlerObj.displayName || bowlerObj.fullName || bowlerObj.name)) || ""
+    );
+
+    const fieldersRaw = Array.isArray(outDetails && outDetails.fielders) ? outDetails.fielders : [];
+    const fielderIds = fieldersRaw
+      .map((f) => (f && f.athlete && f.athlete.id ? String(f.athlete.id) : ""))
+      .filter(Boolean);
+    const fielderNames = fieldersRaw
+      .map((f) => {
+        const fn = cleanCricketEntityText(
+          (f && f.athlete && (f.athlete.displayName || f.athlete.fullName || f.athlete.name)) || ""
+        );
+        if (!fn) return "";
+        const prefix = f.isSubstitute ? "sub " : f.isKeeper ? "†" : "";
+        return `${prefix}${fn}`;
+      })
+      .filter(Boolean);
+
+    const detailsObj = outDetails && outDetails.details;
+    const fallOv =
+      detailsObj && detailsObj.over && detailsObj.over.overs !== undefined ? String(detailsObj.over.overs) : "";
+    const fallRuns =
+      detailsObj && detailsObj.innings && detailsObj.innings.runs !== undefined ? detailsObj.innings.runs : "";
+    const fallWkts =
+      detailsObj && detailsObj.innings && detailsObj.innings.wickets !== undefined ? detailsObj.innings.wickets : "";
+    const fallScore = fallRuns !== "" ? `${fallRuns}${fallWkts !== "" ? `/${fallWkts}` : ""}` : "";
+    const fallText = fallOv ? `Fell at ${fallScore ? `${fallScore} ` : ""}(${fallOv} ov)` : "";
+
+    if (/retired\s+(?:hurt|not\s*out)/i.test(rawShort) || card === "retired hurt") {
+      return { isOut: false, notOut: true, text: "Retired hurt", fallText };
+    }
+
+    const hasOutSignal = Boolean(
+      bowlerName ||
+        fielderNames.length ||
+        (card && card !== "not out") ||
+        (rawShort && !/^not\s*out$/i.test(rawShort))
+    );
+    if (!hasOutSignal || card === "not out" || /^not\s*out$/i.test(rawShort)) {
+      return { isOut: false, notOut: true, text: "Not out", fallText: "" };
+    }
+
+    const isCaughtAndBowled =
+      card === "c & b" ||
+      /^c\s*&\s*b\b/i.test(rawShort) ||
+      ((card === "c" || card === "caught") &&
+        fielderIds.length === 1 &&
+        bowlerId &&
+        fielderIds[0] === bowlerId);
+
+    const formatWithFielder = (prefixRe, label) => {
+      const byFielder = fielderNames.length
+        ? fielderNames.join(" / ")
+        : extractDismissalSegment(rawShort, prefixRe, /\s+b\s+/);
+      const bowledBy = bowlerName || extractDismissalSegment(rawShort, /^.*?\sb\s+/);
+      return `${label}${byFielder ? ` ${byFielder}` : ""}${bowledBy ? ` • b ${bowledBy}` : ""}`;
+    };
+
+    let text = "";
+    if (isCaughtAndBowled) {
+      const byName = bowlerName || extractDismissalSegment(rawShort, /^c\s*&\s*b\s+/i);
+      text = byName ? `Caught & Bowled ${byName}` : "Caught & Bowled";
+    } else if (card === "c" || card === "caught" || /^c\s+/i.test(rawShort)) {
+      text = formatWithFielder(/^c\s+/i, "Caught");
+    } else if (card === "bowled" || card === "b" || /^b\s+/i.test(rawShort)) {
+      const bowledBy = bowlerName || rawShort.replace(/^b\s+/i, "").trim();
+      text = bowledBy ? `Bowled ${bowledBy}` : "Bowled";
+    } else if (card === "lbw" || /^lbw\b/i.test(rawShort)) {
+      const bowledBy = bowlerName || rawShort.replace(/^lbw(?:\s+b)?\s+/i, "").trim();
+      text = bowledBy ? `LBW • b ${bowledBy}` : "LBW";
+    } else if (card === "st" || card === "stumped" || /^st\s+/i.test(rawShort)) {
+      text = formatWithFielder(/^st\s+/i, "Stumped");
+    } else if (card === "run out" || card === "ro" || /^run\s*out/i.test(rawShort)) {
+      const roMatch = rawShort.match(/\(([^)]+)\)/);
+      const runOutBy = fielderNames.length ? fielderNames.join(" / ") : roMatch ? roMatch[1].trim() : "";
+      text = runOutBy ? `Run out (${runOutBy})` : "Run out";
+    } else if (card === "hit wicket" || card === "hw" || /^hit\s*wicket/i.test(rawShort)) {
+      const bowledBy = bowlerName || rawShort.replace(/^hit\s*wicket(?:\s+b)?\s+/i, "").trim();
+      text = bowledBy ? `Hit wicket • b ${bowledBy}` : "Hit wicket";
+    } else if (/retired\s*out/i.test(rawShort) || card === "retired out") {
+      text = "Retired out";
+    } else if (rawShort) {
+      text = rawShort.charAt(0).toUpperCase() + rawShort.slice(1);
+    } else {
+      text = bowlerName ? `Out • b ${bowlerName}` : "Out";
+    }
+
+    return { isOut: true, notOut: false, text, fallText };
+  }
+
+  function sanitizeHexColor(raw, fallback) {
+    const clean = String(raw || "").replace(/^#/, "").trim();
+    return /^[0-9a-f]{6}$/i.test(clean) ? `#${clean}` : fallback || "#38bdf8";
+  }
+
+  function computeCricketExtrasInfo(bCard, bowlersList, innRuns, battersList) {
+    const rawExtras = cleanCricketEntityText((bCard && bCard.extras) || "");
+    const batRunsSum = (battersList || []).reduce((acc, b) => acc + (b.batted ? Number(b.runs) || 0 : 0), 0);
+    const bowlWides = (bowlersList || []).reduce((acc, bw) => acc + (Number(bw.wides) || 0), 0);
+    const bowlNoballs = (bowlersList || []).reduce((acc, bw) => acc + (Number(bw.noballs) || 0), 0);
+
+    let count = 0;
+    if (Number.isFinite(innRuns) && innRuns >= batRunsSum) {
+      count = innRuns - batRunsSum;
+    } else if (rawExtras) {
+      const nums = rawExtras.match(/\d+/g);
+      count = nums ? nums.reduce((s, n) => s + parseInt(n, 10), 0) : 0;
+    } else {
+      count = bowlWides + bowlNoballs;
+    }
+
+    let detail = rawExtras;
+    if (!detail && (bowlWides > 0 || bowlNoballs > 0)) {
+      const parts = [];
+      if (bowlWides > 0) parts.push(`w ${bowlWides}`);
+      if (bowlNoballs > 0) parts.push(`nb ${bowlNoballs}`);
+      detail = `(${parts.join(", ")})`;
+    }
+
+    return { extrasCount: count, extrasDetail: detail };
+  }
+
   function buildCricketInningsAndSquads(sum, match) {
     const rosters = Array.isArray(sum && sum.rosters) ? sum.rosters : [];
     const squads = Array.isArray(sum && sum.squads) ? sum.squads : [];
@@ -1007,6 +1182,7 @@
 
           let bestBatPos = 999;
           const inningsBatParts = [];
+          const inningsBatEntries = [];
           let bowlOversDec = 0;
           let bowlRuns = 0;
           let bowlMaidens = 0;
@@ -1022,8 +1198,19 @@
             if (batted) {
               const rVal = st.runs ? st.runs.value : 0;
               const bVal = st.ballsFaced ? st.ballsFaced.value : 0;
-              const notOut = st.notouts && st.notouts.value === 1;
-              inningsBatParts.push(`${rVal}${notOut ? "*" : ""} (${bVal}b)`);
+              const outObj = ls.statistics && ls.statistics.batting && ls.statistics.batting.outDetails;
+              const disInfo = formatCricketDismissal(outObj, true, "");
+              const notOut = disInfo.notOut || (st.notouts && st.notouts.value === 1 && !disInfo.isOut);
+              const scoreText = `${rVal}${notOut ? "*" : ""} (${bVal}b)`;
+              const suffix = disInfo.isOut ? disInfo.text : notOut ? "Not out" : "";
+              inningsBatParts.push(suffix ? `${scoreText} • ${suffix}` : scoreText);
+              inningsBatEntries.push({
+                scoreText,
+                isOut: disInfo.isOut,
+                notOut,
+                dismissalText: disInfo.text,
+                fallText: disInfo.fallText
+              });
             }
             const ovStr = st.overs && st.overs.displayValue;
             const ovDec = oversToDecimal(ovStr);
@@ -1057,6 +1244,7 @@
             batOrder: bestBatPos,
             rosterIdx: pIdx,
             batSummary: inningsBatParts.length ? inningsBatParts.join(" & ") : "Yet to bat",
+            batEntries: inningsBatEntries,
             bowled: inningsBowledCount > 0 || bowlBallsTotal > 0,
             bowlSummary:
               inningsBowledCount > 0 || bowlBallsTotal > 0
@@ -1114,6 +1302,7 @@
             keeper: Boolean(a.keeper),
             batOrder: idx + 1,
             batSummary: "Squad announced",
+            batEntries: [],
             bowled: false,
             bowlSummary: ""
           })),
@@ -1160,17 +1349,24 @@
         const bowlTeam = rosters[bowlRosterIdx];
         const batTeamName =
           (batTeam.team && (batTeam.team.displayName || batTeam.team.name)) || `Team ${batRosterIdx + 1}`;
+        const batTeamAbbr =
+          ((batTeam.team && batTeam.team.abbreviation) || deriveTeamAbbr(batTeamName, "TM")).toUpperCase();
+        const headerCompObj =
+          compComps.find((c) => c.team && batTeam.team && String(c.team.id) === String(batTeam.team.id)) || null;
+        const batTeamColor = sanitizeHexColor(
+          (batTeam.team && batTeam.team.color) || (headerCompObj && headerCompObj.team && headerCompObj.team.color),
+          "#38bdf8"
+        );
         const bowlTeamName =
           (bowlTeam && bowlTeam.team && (bowlTeam.team.displayName || bowlTeam.team.name)) || "Bowling Team";
 
-        const headerCompObj =
-          compComps.find((c) => c.team && batTeam.team && String(c.team.id) === String(batTeam.team.id)) || null;
         const headerLs =
           headerCompObj && Array.isArray(headerCompObj.linescores)
             ? headerCompObj.linescores.find((l) => Number(l.period) === period)
             : null;
+        const innOversStr = headerLs && headerLs.overs ? String(headerLs.overs) : "";
         const innScoreStr = headerLs
-          ? `${headerLs.score || `${headerLs.runs ?? 0}/${headerLs.wickets ?? 0}`}${headerLs.overs ? ` (${headerLs.overs} ov)` : ""}`
+          ? `${headerLs.score || `${headerLs.runs ?? 0}/${headerLs.wickets ?? 0}`}${innOversStr && !String(headerLs.score || "").includes("ov") ? ` (${innOversStr} ov)` : ""}`
           : "";
 
         const battersList = (batTeam.roster || [])
@@ -1189,22 +1385,23 @@
             const sr = batted
               ? (st.strikeRate && st.strikeRate.displayValue) || (balls > 0 ? ((runs / balls) * 100).toFixed(1) : "0.0")
               : "-";
-            const outShort =
-              ls.statistics && ls.statistics.batting && ls.statistics.batting.outDetails && ls.statistics.batting.outDetails.shortText
-                ? cleanCricketEntityText(ls.statistics.batting.outDetails.shortText)
-                : "";
-            const notOut = batted && ((st.notouts && st.notouts.value === 1) || !outShort);
+            const outObj = ls.statistics && ls.statistics.batting && ls.statistics.batting.outDetails;
+            const disInfo = formatCricketDismissal(outObj, batted, "");
+            const notOut = batted && (disInfo.notOut || (st.notouts && st.notouts.value === 1 && !disInfo.isOut));
             const activeRole = p.active ? p.activeName || "batting" : "";
 
             return {
+              id: athId,
               order,
               name: ath.displayName || ath.battingName || "Batter",
               captain: Boolean(p.captain || captainIds.has(athId)),
               keeper: keeperIds.has(athId),
               batted,
+              isOut: disInfo.isOut,
               notOut,
               activeRole,
-              dismissal: batted ? (outShort || "not out") : "Yet to bat",
+              dismissal: disInfo.text,
+              fallText: disInfo.fallText,
               runs,
               balls,
               fours,
@@ -1219,6 +1416,7 @@
             ? bowlTeam.roster
                 .map((p, idx) => {
                   const ath = p.athlete || {};
+                  const athId = String(ath.id || "");
                   const ls = (p.linescores || []).find((x) => Number(x.period) === period) || {};
                   const st = extractCricketPlayerStatMap(ls);
                   const ovStr = st.overs ? st.overs.displayValue : "";
@@ -1236,6 +1434,7 @@
                   const pos = st.bowlingPosition && st.bowlingPosition.value ? st.bowlingPosition.value : 50 + idx;
 
                   return {
+                    id: athId,
                     order: pos,
                     name: ath.displayName || ath.fieldingName || "Bowler",
                     overs: ovStr || "0",
@@ -1254,11 +1453,51 @@
                 .sort((a, b) => a.order - b.order)
             : [];
 
+        const bCard = cards.find(
+          (c) => String(c.headline || "").toLowerCase() === "batting" && Number(c.inningsNumber) === period
+        );
+        const innRunsNum =
+          headerLs && headerLs.runs !== undefined && headerLs.runs !== null ? Number(headerLs.runs) : NaN;
+        const innWktsNum =
+          headerLs && headerLs.wickets !== undefined && headerLs.wickets !== null
+            ? Number(headerLs.wickets)
+            : battersList.filter((b) => b.isOut).length;
+        const innOversDec = oversToDecimal(innOversStr);
+        const innRunRate =
+          Number.isFinite(innRunsNum) && innOversDec > 0 ? (innRunsNum / innOversDec).toFixed(2) : "";
+        const { extrasCount, extrasDetail } = computeCricketExtrasInfo(bCard, bowlersList, innRunsNum, battersList);
+        const fowList = Array.isArray(headerLs && headerLs.fow)
+          ? headerLs.fow
+              .map((fw) => ({
+                wicket: fw.wicketNumber || "",
+                runs: fw.runs !== undefined ? fw.runs : "",
+                over: fw.wicketOver !== undefined ? String(fw.wicketOver) : "",
+                batter: cleanCricketEntityText(
+                  (fw.athlete && (fw.athlete.displayName || fw.athlete.shortName || fw.athlete.name)) || ""
+                )
+              }))
+              .filter((fw) => fw.wicket !== "")
+          : [];
+        const scoreBadge = Number.isFinite(innRunsNum)
+          ? `${innRunsNum}${innWktsNum >= 10 || (headerLs && headerLs.description === "all out") ? "" : `/${innWktsNum}`}`
+          : "";
+
         inningsMap.set(period, {
           period,
           batTeamName,
+          batTeamAbbr,
+          batTeamColor,
           bowlTeamName,
           scoreText: innScoreStr,
+          scoreBadge,
+          runs: Number.isFinite(innRunsNum) ? innRunsNum : null,
+          wickets: innWktsNum,
+          overs: innOversStr,
+          runRate: innRunRate,
+          summaryDesc: (headerLs && headerLs.description) || "",
+          extrasCount,
+          extrasDetail,
+          fowList,
           title: `${batTeamName}${innScoreStr ? ` — ${innScoreStr}` : ""}`,
           batters: battersList,
           bowlers: bowlersList
@@ -1279,13 +1518,15 @@
           const batted = p.runs !== "" && p.runs !== undefined;
           const r = parseInt(p.runs, 10) || 0;
           const b = parseInt(p.ballsFaced, 10) || 0;
-          const dis = cleanCricketEntityText(p.dismissal || "");
+          const disInfo = formatCricketDismissal(null, batted, p.dismissal || "");
           return {
             order: idx + 1,
             name: p.playerName || "Batter",
             batted,
-            notOut: batted && (!dis || /not out/i.test(dis)),
-            dismissal: batted ? dis || "not out" : "Yet to bat",
+            isOut: disInfo.isOut,
+            notOut: disInfo.notOut,
+            dismissal: disInfo.text,
+            fallText: disInfo.fallText,
             runs: r,
             balls: b,
             fours: parseInt(p.fours, 10) || 0,
@@ -1307,12 +1548,25 @@
             avg: wkts > 0 ? (runs / wkts).toFixed(2) : "-"
           };
         });
+        const batTeamNm = (bCard && bCard.teamName) || "Batting";
+        const { extrasCount, extrasDetail } = computeCricketExtrasInfo(bCard, bowlersList, NaN, battersList);
         inningsCards.push({
           period: pNum,
-          batTeamName: (bCard && bCard.teamName) || "Batting",
+          batTeamName: batTeamNm,
+          batTeamAbbr: deriveTeamAbbr(batTeamNm, "TM"),
+          batTeamColor: "#38bdf8",
           bowlTeamName: (wCard && wCard.teamName) || "Bowling",
-          scoreText: "",
-          title: `${(bCard && bCard.teamName) || "Innings"} (Inn ${pNum})`,
+          scoreText: cleanCricketEntityText((bCard && bCard.total) || ""),
+          scoreBadge: cleanCricketEntityText((bCard && bCard.total) || ""),
+          runs: null,
+          wickets: battersList.filter((b) => b.isOut).length,
+          overs: "",
+          runRate: bCard && bCard.runRate ? String(bCard.runRate) : "",
+          summaryDesc: "",
+          extrasCount,
+          extrasDetail,
+          fowList: [],
+          title: `${batTeamNm} (Inn ${pNum})`,
           batters: battersList,
           bowlers: bowlersList
         });
@@ -1322,94 +1576,393 @@
     return { inningsCards, teamSummaries };
   }
 
-  async function fetchCricketMatchSummary(match) {
+  function formatCricketBallDelivery(item) {
+    const pt = String((item && item.playType && item.playType.description) || "").toLowerCase();
+    const ov = (item && item.over) || {};
+    const runs = parseInt(item && item.scoreValue, 10) || 0;
+    const isDismissal = Boolean((item && item.dismissal && item.dismissal.dismissal) || pt === "out" || /\bwicket\b/i.test(pt));
+    const wideCount = parseInt(ov.wide, 10) || (pt.includes("wide") ? runs || 1 : 0);
+    const nbCount = parseInt(ov.noBall, 10) || (pt.includes("no ball") ? runs || 1 : 0);
+    const lbCount = parseInt(ov.legByes, 10) || (pt.includes("leg bye") ? runs || 1 : 0);
+    const byeCount = (!lbCount && (parseInt(ov.byes, 10) || (pt === "bye" || pt.includes("byes") ? runs || 1 : 0))) || 0;
+
+    let label = "0";
+    let kind = "dot";
+
+    if (isDismissal) {
+      if (wideCount > 0) label = `${Math.max(1, runs || wideCount)}WD+W`;
+      else if (nbCount > 0) label = `${Math.max(1, runs || nbCount)}NB+W`;
+      else label = "W";
+      kind = "wicket";
+    } else if (wideCount > 0 || pt.includes("wide")) {
+      label = `${Math.max(1, runs || wideCount)}WD`;
+      kind = "extra";
+    } else if (nbCount > 0 || pt.includes("no ball")) {
+      label = `${Math.max(1, runs || nbCount)}NB`;
+      kind = "extra";
+    } else if (lbCount > 0 || pt.includes("leg bye")) {
+      label = `${Math.max(1, runs || lbCount)}LB`;
+      kind = "extra";
+    } else if (byeCount > 0 || pt.includes("bye")) {
+      label = `${Math.max(1, runs || byeCount)}B`;
+      kind = "extra";
+    } else if (runs === 6 || pt === "six") {
+      label = "6";
+      kind = "six";
+    } else if (runs === 4 || pt === "four") {
+      label = "4";
+      kind = "four";
+    } else if (runs > 0) {
+      label = String(runs);
+      kind = "run";
+    }
+
+    const overPos = ov.actual !== undefined ? `${ov.actual} ov` : "";
+    const shortDesc = cleanCricketEntityText(item && (item.shortText || (item.playType && item.playType.description) || ""));
+    const tooltip = [overPos, shortDesc].filter(Boolean).join(" — ");
+
+    return {
+      label,
+      kind,
+      tooltip,
+      runs,
+      isWicket: isDismissal
+    };
+  }
+
+  function extractBowlerFromShortText(shortText) {
+    const m = String(shortText || "").match(/^([A-Za-z][A-Za-z.'\-\s]{1,34}?)\s+to\s+[A-Za-z]/);
+    return m ? m[1].trim() : "";
+  }
+
+  function buildCricketOverByOver(items, match) {
+    if (!Array.isArray(items) || !items.length) return [];
+
+    // Deduplicate real deliveries (ignore 0/0.0 pre-play or post-innings sentinels)
+    const dedupMap = new Map();
+    items.forEach((it) => {
+      if (!it || !it.over) return;
+      const ov = it.over;
+      const hasDelivery = Number(ov.number) > 0 || Number(ov.ball) > 0 || Number(ov.actual) > 0;
+      if (!hasDelivery) return;
+      const key = `${it.period || 1}:${it.id || it.sequence}`;
+      if (!dedupMap.has(key)) dedupMap.set(key, it);
+    });
+
+    const sortedItems = Array.from(dedupMap.values()).sort((a, b) => {
+      const pDiff = (Number(a.period) || 1) - (Number(b.period) || 1);
+      if (pDiff !== 0) return pDiff;
+      const seqDiff = (Number(a.sequence) || 0) - (Number(b.sequence) || 0);
+      if (seqDiff !== 0) return seqDiff;
+      return (Number(a.over && a.over.actual) || 0) - (Number(b.over && b.over.actual) || 0);
+    });
+
+    const periodMap = new Map();
+    sortedItems.forEach((it) => {
+      const period = Number(it.period) || 1;
+      const ov = it.over || {};
+      const overNum = Number(ov.number) || Math.floor(Number(ov.actual || 0)) + 1;
+      if (!overNum || overNum < 1) return;
+
+      if (!periodMap.has(period)) {
+        const tmName =
+          (it.team && (it.team.displayName || it.team.name || it.team.abbreviation)) ||
+          (it.periodText ? String(it.periodText) : `Innings ${period}`);
+        const innText = it.periodText ? `${tmName} (${it.periodText})` : `${tmName} — Innings ${period}`;
+        periodMap.set(period, {
+          period,
+          label: cleanCricketEntityText(innText),
+          oversMap: new Map()
+        });
+      }
+
+      const pGroup = periodMap.get(period);
+      const bwName =
+        (it.bowler && it.bowler.athlete && (it.bowler.athlete.shortName || it.bowler.athlete.displayName)) ||
+        extractBowlerFromShortText(it.shortText);
+      if (!pGroup.oversMap.has(overNum)) {
+        pGroup.oversMap.set(overNum, {
+          overNumber: overNum,
+          bowler: cleanCricketEntityText(bwName),
+          runs: 0,
+          wickets: 0,
+          balls: []
+        });
+      }
+
+      const overEntry = pGroup.oversMap.get(overNum);
+      if (!overEntry.bowler && bwName) {
+        overEntry.bowler = cleanCricketEntityText(bwName);
+      }
+
+      const ballObj = formatCricketBallDelivery(it);
+      overEntry.runs += ballObj.runs;
+      if (ballObj.isWicket) overEntry.wickets += 1;
+      overEntry.balls.push(ballObj);
+    });
+
+    return Array.from(periodMap.values())
+      .sort((a, b) => a.period - b.period)
+      .map((pg) => ({
+        period: pg.period,
+        label: pg.label,
+        overs: Array.from(pg.oversMap.values()).sort((a, b) => a.overNumber - b.overNumber)
+      }));
+  }
+
+  async function fetchCricketPlayByPlay(match, includeFullOvers, options) {
     if (!match || !match.leagueId || !match.rawEventId) return null;
-    try {
-      const sum = await fetchResource(
-        `/api/cricket/espn-summary/${match.leagueId}?event=${match.rawEventId}`,
-        `https://site.web.api.espn.com/apis/site/v2/sports/cricket/${match.leagueId}/summary?contentorigin=espn&event=${match.rawEventId}&lang=en&region=in`,
-        "json"
+    const force = Boolean(options && options.force);
+
+    if (
+      includeFullOvers &&
+      !force &&
+      match.status === "FT" &&
+      match._oversCached &&
+      Array.isArray(match.overByOver) &&
+      match.overByOver.length
+    ) {
+      match._oversLoaded = true;
+      match._oversError = false;
+      return match.overByOver;
+    }
+
+    if (includeFullOvers && match._oversPromise && !force) {
+      return match._oversPromise;
+    }
+
+    const fetchPage = (pg) =>
+      fetchResource(
+        `/api/cricket/espn-playbyplay/${match.leagueId}?event=${match.rawEventId}&page=${pg}`,
+        `https://site.web.api.espn.com/apis/site/v2/sports/cricket/${match.leagueId}/playbyplay?contentorigin=espn&event=${match.rawEventId}&lang=en&region=in&page=${pg}`,
+        "json",
+        { timeoutMs: 11000 }
       );
 
-      const comp = sum && sum.header && sum.header.competitions && sum.header.competitions[0];
-      if (comp) {
-        const mapped = mapStatus(comp.status);
-        match.status = mapped.status;
-        match.clock = formatCricketClock(comp.status, comp.status && comp.status.session, comp.date);
-        if (comp.status && comp.status.summary) match.equation = comp.status.summary;
+    const fetchPageWithRetry = async (pg) => {
+      try {
+        return await fetchPage(pg);
+      } catch (_) {
+        return await fetchPage(pg);
+      }
+    };
 
-        const comps = Array.isArray(comp.competitors) ? comp.competitors : [];
-        const batTeamId = comp.status && comp.status.battingTeamId ? String(comp.status.battingTeamId) : "";
-        [match.team1, match.team2].forEach((teamObj, idx) => {
-          const cObj = comps.find((c) => c.team && String(c.team.id) === String(teamObj.id)) || comps[idx];
-          if (!cObj) return;
-          const parsed = splitEspnCricketScore(cObj.score, mapped.status, cObj.linescores);
-          teamObj.runs = parsed.runs;
-          teamObj.wickets = parsed.wickets;
-          teamObj.scoreDisplay = parsed.scoreDisplay;
-          if (parsed.overs && parsed.overs !== "-") teamObj.overs = parsed.overs;
-          if (parsed.target && !match.target) match.target = parsed.target;
-          teamObj.isBatting =
-            mapped.status === "LIVE" &&
-            (Boolean(batTeamId && String(teamObj.id) === batTeamId) || parsed.isCurrentBatting);
-        });
+    const run = async () => {
+      if (includeFullOvers) {
+        match._oversLoading = true;
+        match._oversError = false;
+      }
+      try {
+        const p1 = await fetchPageWithRetry(1);
+        const comm1 = p1 && p1.commentary;
+        const items1 = Array.isArray(comm1 && comm1.items) ? comm1.items : [];
+        const pageCount = Math.max(1, Number(comm1 && comm1.pageCount) || 1);
 
-        const battingTeam = match.team1.isBatting ? match.team1 : match.team2.isBatting ? match.team2 : null;
-        if (battingTeam) {
-          const rates = computeCricketRates(battingTeam.runs, battingTeam.overs, match.format, match.target);
-          match.crr = rates.crr;
-          match.rrr = rates.rrr;
+        const allItems = [...items1];
+        let targetPages = [];
+        let isPartialWindow = false;
+
+        if (!includeFullOvers) {
+          if (pageCount > 1) targetPages = [pageCount];
+        } else if (pageCount > 1) {
+          if (pageCount <= 24) {
+            for (let pg = 2; pg <= pageCount; pg += 1) targetPages.push(pg);
+          } else {
+            // For multi-day Tests, load opening page + newest 20 pages (~80 latest overs)
+            isPartialWindow = true;
+            const startTail = Math.max(2, pageCount - 19);
+            for (let pg = startTail; pg <= pageCount; pg += 1) targetPages.push(pg);
+          }
+        }
+
+        const failedPages = [];
+        for (let i = 0; i < targetPages.length; i += 4) {
+          const slice = targetPages.slice(i, i + 4);
+          const batchRes = await Promise.allSettled(slice.map((pg) => fetchPage(pg)));
+          batchRes.forEach((r, idx) => {
+            if (r.status === "fulfilled" && r.value && r.value.commentary && Array.isArray(r.value.commentary.items)) {
+              allItems.push(...r.value.commentary.items);
+            } else {
+              failedPages.push(slice[idx]);
+            }
+          });
+        }
+
+        if (failedPages.length) {
+          const retryRes = await Promise.allSettled(failedPages.map((pg) => fetchPage(pg)));
+          retryRes.forEach((r) => {
+            if (r.status === "fulfilled" && r.value && r.value.commentary && Array.isArray(r.value.commentary.items)) {
+              allItems.push(...r.value.commentary.items);
+            }
+          });
+        }
+
+        const groups = buildCricketOverByOver(allItems, match);
+        if (groups.length) {
+          const lastGroup = groups[groups.length - 1];
+          const recentBalls = [];
+          lastGroup.overs.slice(-2).forEach((ov) => {
+            ov.balls.forEach((b) => recentBalls.push(b));
+          });
+          if (recentBalls.length) {
+            match.recentBalls = recentBalls.slice(-10);
+          }
+        }
+
+        if (includeFullOvers) {
+          if (groups.length || !Array.isArray(match.overByOver) || !match.overByOver.length) {
+            match.overByOver = groups;
+          }
+          match.overByOverPartial = isPartialWindow;
+          match._oversLoaded = true;
+          match._oversError = false;
+          match._oversLastFetchTs = Date.now();
+          if (match.status === "FT" && groups.length) {
+            match._oversCached = true;
+          }
+        }
+        return groups;
+      } catch (_) {
+        if (includeFullOvers) {
+          match._oversError = true;
+          if (!Array.isArray(match.overByOver) || !match.overByOver.length) {
+            match._oversLoaded = false;
+          }
+        }
+        return null;
+      } finally {
+        if (includeFullOvers) {
+          match._oversLoading = false;
+          if (match._oversPromise === taskPromise) {
+            match._oversPromise = null;
+          }
+        }
+      }
+    };
+
+    const taskPromise = run();
+    if (includeFullOvers) {
+      match._oversPromise = taskPromise;
+    }
+    return taskPromise;
+  }
+
+  async function fetchCricketMatchSummary(match, options) {
+    if (!match || !match.leagueId || !match.rawEventId) return null;
+    const opts = options || {};
+    const wantFullOvers = Boolean(opts.includeOvers || opts.forceOvers);
+    try {
+      const pbpPromise =
+        wantFullOvers || match.status === "LIVE"
+          ? fetchCricketPlayByPlay(match, wantFullOvers, { force: Boolean(opts.forceOvers) }).catch(() => null)
+          : Promise.resolve(null);
+
+      let sum = null;
+      try {
+        sum = await fetchResource(
+          `/api/cricket/espn-summary/${match.leagueId}?event=${match.rawEventId}`,
+          `https://site.web.api.espn.com/apis/site/v2/sports/cricket/${match.leagueId}/summary?contentorigin=espn&event=${match.rawEventId}&lang=en&region=in`,
+          "json",
+          { timeoutMs: 10000 }
+        );
+      } catch (_) {
+        sum = null;
+      }
+
+      if (sum) {
+        const comp = sum.header && sum.header.competitions && sum.header.competitions[0];
+        if (comp) {
+          const mapped = mapStatus(comp.status);
+          match.status = mapped.status;
+          match.clock = formatCricketClock(comp.status, comp.status && comp.status.session, comp.date);
+          if (comp.status && comp.status.summary) match.equation = comp.status.summary;
+
+          const comps = Array.isArray(comp.competitors) ? comp.competitors : [];
+          const batTeamId = comp.status && comp.status.battingTeamId ? String(comp.status.battingTeamId) : "";
+          [match.team1, match.team2].forEach((teamObj, idx) => {
+            const cObj = comps.find((c) => c.team && String(c.team.id) === String(teamObj.id)) || comps[idx];
+            if (!cObj) return;
+            const parsed = splitEspnCricketScore(cObj.score, mapped.status, cObj.linescores);
+            teamObj.runs = parsed.runs;
+            teamObj.wickets = parsed.wickets;
+            teamObj.scoreDisplay = parsed.scoreDisplay;
+            teamObj.winner = Boolean(cObj.winner);
+            if (cObj.team && cObj.team.color) {
+              teamObj.color = sanitizeHexColor(cObj.team.color, teamObj.color);
+            }
+            if (parsed.overs && parsed.overs !== "-") teamObj.overs = parsed.overs;
+            if (parsed.target && !match.target) match.target = parsed.target;
+            teamObj.isBatting =
+              mapped.status === "LIVE" &&
+              (Boolean(batTeamId && String(teamObj.id) === batTeamId) || parsed.isCurrentBatting);
+          });
+
+          const battingTeam = match.team1.isBatting ? match.team1 : match.team2.isBatting ? match.team2 : null;
+          if (battingTeam) {
+            const rates = computeCricketRates(battingTeam.runs, battingTeam.overs, match.format, match.target);
+            match.crr = rates.crr;
+            match.rrr = rates.rrr;
+          }
+        }
+
+        if (sum.gameInfo && sum.gameInfo.venue && sum.gameInfo.venue.fullName) {
+          const vFull = sum.gameInfo.venue.fullName;
+          const vCity = sum.gameInfo.venue.address && sum.gameInfo.venue.address.city;
+          match.venue = vCity && !vFull.toLowerCase().includes(vCity.toLowerCase()) ? `${vFull}, ${vCity}` : vFull;
+        }
+
+        const structured = buildCricketInningsAndSquads(sum, match);
+        if (structured.inningsCards.length) {
+          match.inningsCards = structured.inningsCards;
+          const latestInn = structured.inningsCards[structured.inningsCards.length - 1];
+          const battedInLatest = latestInn.batters.filter((b) => b.batted);
+          const notOutInLatest = battedInLatest.filter((b) => b.notOut);
+          const heroBatters = (notOutInLatest.length ? notOutInLatest : battedInLatest.slice(-2)).slice(0, 2);
+          if (heroBatters.length) {
+            match.batters = heroBatters.map((b, idx) => ({
+              name: b.name,
+              runs: b.runs,
+              balls: b.balls,
+              fours: b.fours,
+              sixes: b.sixes,
+              sr: b.sr,
+              isOut: Boolean(b.isOut),
+              notOut: Boolean(b.notOut),
+              dismissal: b.dismissal || "",
+              striker: b.activeRole ? b.activeRole === "striker" : idx === 0
+            }));
+          }
+          if (latestInn.bowlers.length) {
+            const activeBw = latestInn.bowlers.find((bw) => bw.isActive) || latestInn.bowlers[latestInn.bowlers.length - 1];
+            match.bowler = activeBw;
+          }
+        }
+        if (structured.teamSummaries.length) {
+          match.squads = structured.teamSummaries;
+        }
+
+        const rawNotes = Array.isArray(sum.notes) ? sum.notes : [];
+        const matchNotes = rawNotes
+          .filter((n) => n && n.type === "matchnote" && n.text)
+          .slice(-5)
+          .reverse()
+          .map((n) => cleanCricketEntityText(n.text));
+        const preNotes = rawNotes
+          .filter((n) => n && (n.type === "toss" || n.type === "hoursofplay" || n.type === "matchdays") && n.text)
+          .map((n) => cleanCricketEntityText(n.text));
+
+        match.recentNotes = matchNotes.length ? matchNotes : preNotes;
+        if (match.recentNotes.length) {
+          match.lastBallNote = match.recentNotes[0];
+        }
+        match._summaryEnriched = true;
+        if (typeof opts.onSummaryReady === "function") {
+          opts.onSummaryReady(match);
         }
       }
 
-      if (sum && sum.gameInfo && sum.gameInfo.venue && sum.gameInfo.venue.fullName) {
-        const vCity = sum.gameInfo.venue.address && sum.gameInfo.venue.address.city;
-        match.venue = vCity ? `${sum.gameInfo.venue.fullName}, ${vCity}` : sum.gameInfo.venue.fullName;
-      }
-
-      const structured = buildCricketInningsAndSquads(sum, match);
-      if (structured.inningsCards.length) {
-        match.inningsCards = structured.inningsCards;
-        const latestInn = structured.inningsCards[structured.inningsCards.length - 1];
-        const battedInLatest = latestInn.batters.filter((b) => b.batted);
-        const notOutInLatest = battedInLatest.filter((b) => b.notOut);
-        const heroBatters = (notOutInLatest.length ? notOutInLatest : battedInLatest.slice(-2)).slice(0, 2);
-        if (heroBatters.length) {
-          match.batters = heroBatters.map((b, idx) => ({
-            name: b.name,
-            runs: b.runs,
-            balls: b.balls,
-            fours: b.fours,
-            sixes: b.sixes,
-            sr: b.sr,
-            striker: b.activeRole ? b.activeRole === "striker" : idx === 0
-          }));
-        }
-        if (latestInn.bowlers.length) {
-          const activeBw = latestInn.bowlers.find((bw) => bw.isActive) || latestInn.bowlers[latestInn.bowlers.length - 1];
-          match.bowler = activeBw;
-        }
-      }
-      if (structured.teamSummaries.length) {
-        match.squads = structured.teamSummaries;
-      }
-
-      const rawNotes = Array.isArray(sum && sum.notes) ? sum.notes : [];
-      const matchNotes = rawNotes
-        .filter((n) => n && n.type === "matchnote" && n.text)
-        .slice(-5)
-        .reverse()
-        .map((n) => cleanCricketEntityText(n.text));
-      const preNotes = rawNotes
-        .filter((n) => n && (n.type === "toss" || n.type === "hoursofplay" || n.type === "matchdays") && n.text)
-        .map((n) => cleanCricketEntityText(n.text));
-
-      match.recentNotes = matchNotes.length ? matchNotes : preNotes;
-      if (match.recentNotes.length) {
-        match.lastBallNote = match.recentNotes[0];
-      }
-      match._summaryEnriched = true;
-      return match;
+      const pbpRes = await pbpPromise;
+      return sum || pbpRes ? match : null;
     } catch (_) {
       return null;
     }
@@ -1477,6 +2030,8 @@
 
         return {
           id: `ci-cr-${m.objectId || m.id}`,
+          rawEventId: m.objectId ? String(m.objectId) : "",
+          leagueId: m.series && m.series.objectId ? String(m.series.objectId) : "",
           format,
           series: seriesName,
           status,
@@ -1708,9 +2263,12 @@
         if (!t1.scoreDisplay) t1.scoreDisplay = anyScore ? "Yet to bat" : "-";
         if (!t2.scoreDisplay) t2.scoreDisplay = anyScore ? "Yet to bat" : "-";
         const isIpl = Boolean(IPL_ABBR_MAP[t1.name.toLowerCase()] || IPL_ABBR_MAP[t2.name.toLowerCase()]);
+        const idMatch = link.match(/\/series\/[^/]*-(\d+)\/[^/]*-(\d+)\//);
 
         return {
           id: `rss-cr-${idx}-${t1.abbr}-${t2.abbr}`,
+          leagueId: idMatch ? idMatch[1] : "",
+          rawEventId: idMatch ? idMatch[2] : "",
           format: isIpl ? "IPL" : isLive ? "INTL" : "FIXTURE",
           series: isIpl ? "Indian Premier League" : "Men's International Cricket",
           status,
@@ -1743,14 +2301,140 @@
     return `${mins}:${rem}`;
   }
 
-  async function fetchOpenF1Snapshot() {
-    const [sessionsRes, driversRes, positionsRes, stintsRes, rcRes, weatherRes] = await Promise.allSettled([
-      fetchResource("/api/openf1/sessions", "https://api.openf1.org/v1/sessions?session_key=latest", "json"),
-      fetchResource("/api/openf1/drivers", "https://api.openf1.org/v1/drivers?session_key=latest", "json"),
-      fetchResource("/api/openf1/position", "https://api.openf1.org/v1/position?session_key=latest", "json"),
-      fetchResource("/api/openf1/stints", "https://api.openf1.org/v1/stints?session_key=latest", "json"),
-      fetchResource("/api/openf1/race_control", "https://api.openf1.org/v1/race_control?session_key=latest", "json"),
-      fetchResource("/api/openf1/weather", "https://api.openf1.org/v1/weather?session_key=latest", "json")
+  function computeAgeFromDob(dobStr) {
+    if (!dobStr) return null;
+    const dt = new Date(dobStr);
+    if (Number.isNaN(dt.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - dt.getFullYear();
+    const m = now.getMonth() - dt.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < dt.getDate())) age -= 1;
+    return age > 0 && age < 99 ? age : null;
+  }
+
+  function formatF1CompoundCode(raw) {
+    const c = String(raw || "M").toUpperCase();
+    if (c.startsWith("S")) return "S";
+    if (c.startsWith("H")) return "H";
+    if (c.startsWith("I")) return "I";
+    if (c.startsWith("W")) return "W";
+    return "M";
+  }
+
+  function formatF1GapDisplay(rawTime, status, driverLaps, leaderLaps, pos, isPreviousResult) {
+    if (pos === 1) return isPreviousResult ? "WINNER" : "LEADER";
+    if (Number.isFinite(driverLaps) && Number.isFinite(leaderLaps) && leaderLaps > 0 && driverLaps < leaderLaps) {
+      const diff = leaderLaps - driverLaps;
+      if (!status || status === "Lapped" || /Lap/i.test(status) || status === "Finished") {
+        return `+${diff} Lap${diff > 1 ? "s" : ""}`;
+      }
+      return `${status} (L${driverLaps})`;
+    }
+    if (rawTime) {
+      const s = String(rawTime).trim();
+      return s.includes(":") || s.endsWith("s") ? s : `${s}s`;
+    }
+    return status || "-";
+  }
+
+  function buildJolpiLookupMaps(jolpiData, jolpiPitsData, jolpiStandingsData) {
+    const resRace =
+      jolpiData && jolpiData.MRData && jolpiData.MRData.RaceTable && jolpiData.MRData.RaceTable.Races
+        ? jolpiData.MRData.RaceTable.Races[0] || null
+        : null;
+    const results = resRace && Array.isArray(resRace.Results) ? resRace.Results : [];
+
+    const pitsRace =
+      jolpiPitsData && jolpiPitsData.MRData && jolpiPitsData.MRData.RaceTable && jolpiPitsData.MRData.RaceTable.Races
+        ? jolpiPitsData.MRData.RaceTable.Races[0] || null
+        : null;
+    const pitsByDriverId = new Map();
+    const rawPits = pitsRace && Array.isArray(pitsRace.PitStops) ? pitsRace.PitStops : [];
+    rawPits.forEach((p) => {
+      if (!p || !p.driverId) return;
+      if (!pitsByDriverId.has(p.driverId)) pitsByDriverId.set(p.driverId, []);
+      pitsByDriverId.get(p.driverId).push({
+        stop: parseInt(p.stop, 10) || 1,
+        lap: parseInt(p.lap, 10) || 0,
+        duration: p.duration ? `${Number(p.duration).toFixed(1)}s` : "-"
+      });
+    });
+
+    const standingsLists =
+      jolpiStandingsData &&
+      jolpiStandingsData.MRData &&
+      jolpiStandingsData.MRData.StandingsTable &&
+      jolpiStandingsData.MRData.StandingsTable.StandingsLists
+        ? jolpiStandingsData.MRData.StandingsTable.StandingsLists
+        : [];
+    const standingsArr = standingsLists[0] && Array.isArray(standingsLists[0].DriverStandings)
+      ? standingsLists[0].DriverStandings
+      : [];
+
+    const byCodeStand = new Map();
+    const byFamilyStand = new Map();
+    standingsArr.forEach((s) => {
+      const drv = s && s.Driver ? s.Driver : {};
+      const code = String(drv.code || "").toUpperCase();
+      const fam = String(drv.familyName || "").toLowerCase();
+      if (code) byCodeStand.set(code, s);
+      if (fam) byFamilyStand.set(fam, s);
+    });
+
+    const byCodeResult = new Map();
+    const byNumResult = new Map();
+    const byFamilyResult = new Map();
+    results.forEach((r) => {
+      const drv = r && r.Driver ? r.Driver : {};
+      const code = String(drv.code || "").toUpperCase();
+      const num = String(r.number || drv.permanentNumber || "");
+      const fam = String(drv.familyName || "").toLowerCase();
+      if (code) byCodeResult.set(code, r);
+      if (num) byNumResult.set(num, r);
+      if (fam) byFamilyResult.set(fam, r);
+    });
+
+    return {
+      resRace,
+      results,
+      pitsByDriverId,
+      byCodeStand,
+      byFamilyStand,
+      byCodeResult,
+      byNumResult,
+      byFamilyResult
+    };
+  }
+
+  let openf1CompletedCache = null;
+  const OPENF1_COMPLETED_TTL_MS = 10 * 60 * 1000;
+
+  function sleepMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function fetchOpenF1Safe(proxyPath, directUrl) {
+    try {
+      return await fetchResource(proxyPath, directUrl, "json");
+    } catch (err) {
+      await sleepMs(1150);
+      return await fetchResource(proxyPath, directUrl, "json");
+    }
+  }
+
+  async function fetchOpenF1Snapshot(jolpiBundlePromise) {
+    if (
+      openf1CompletedCache &&
+      Date.now() - openf1CompletedCache.ts < OPENF1_COMPLETED_TTL_MS &&
+      openf1CompletedCache.snapshot
+    ) {
+      return openf1CompletedCache.snapshot;
+    }
+
+    // Pace OpenF1 calls into pairs separated by 850ms with automatic 429 retry
+    const [sessionsRes, driversRes] = await Promise.allSettled([
+      fetchOpenF1Safe("/api/openf1/sessions", "https://api.openf1.org/v1/sessions?session_key=latest"),
+      fetchOpenF1Safe("/api/openf1/drivers", "https://api.openf1.org/v1/drivers?session_key=latest")
     ]);
 
     const sessions = sessionsRes.status === "fulfilled" && Array.isArray(sessionsRes.value) ? sessionsRes.value : [];
@@ -1758,9 +2442,33 @@
     if (!sessions.length || !drivers.length) return null;
 
     const sess = sessions[sessions.length - 1];
+    await sleepMs(850);
+
+    // Pair 2: positions + stints
+    const [positionsRes, stintsRes] = await Promise.allSettled([
+      fetchOpenF1Safe("/api/openf1/position", "https://api.openf1.org/v1/position?session_key=latest"),
+      fetchOpenF1Safe("/api/openf1/stints", "https://api.openf1.org/v1/stints?session_key=latest")
+    ]);
+
     const positions = positionsRes.status === "fulfilled" && Array.isArray(positionsRes.value) ? positionsRes.value : [];
     const stints = stintsRes.status === "fulfilled" && Array.isArray(stintsRes.value) ? stintsRes.value : [];
-    const rcList = rcRes.status === "fulfilled" && Array.isArray(rcRes.value) ? rcRes.value : [];
+
+    // Deduplicate drivers in case OpenF1 returns multiple records
+    const uniqueDriversMap = new Map();
+    drivers.forEach((d) => {
+      if (d && d.driver_number != null) uniqueDriversMap.set(d.driver_number, d);
+    });
+    const uniqueDrivers = Array.from(uniqueDriversMap.values());
+
+    await sleepMs(850);
+
+    // Pair 3: pit stops + weather
+    const [pitsRes, weatherRes] = await Promise.allSettled([
+      fetchOpenF1Safe("/api/openf1/pit", "https://api.openf1.org/v1/pit?session_key=latest"),
+      fetchOpenF1Safe("/api/openf1/weather", "https://api.openf1.org/v1/weather?session_key=latest")
+    ]);
+
+    const openF1Pits = pitsRes.status === "fulfilled" && Array.isArray(pitsRes.value) ? pitsRes.value : [];
     const weatherList = weatherRes.status === "fulfilled" && Array.isArray(weatherRes.value) ? weatherRes.value : [];
 
     // Latest position per driver
@@ -1770,70 +2478,202 @@
     });
 
     // Latest stint per driver & max lap
+    // Aggregate all stints & latest stint per driver
+    const stintsByDriver = {};
     const latestStint = {};
+    const maxStintEndByDriver = {};
     let maxLap = 1;
     stints.forEach((st) => {
+      if (!st || st.driver_number == null) return;
       if (st.lap_end && st.lap_end > maxLap) maxLap = st.lap_end;
+      if (st.lap_end && (!maxStintEndByDriver[st.driver_number] || st.lap_end > maxStintEndByDriver[st.driver_number])) {
+        maxStintEndByDriver[st.driver_number] = st.lap_end;
+      }
+      if (!stintsByDriver[st.driver_number]) stintsByDriver[st.driver_number] = [];
+      stintsByDriver[st.driver_number].push(st);
       const prev = latestStint[st.driver_number];
       if (!prev || (st.stint_number || 0) >= (prev.stint_number || 0)) {
         latestStint[st.driver_number] = st;
       }
     });
 
-    // Fetch only the latest 2 laps from OpenF1 for fast lap timing
-    let lapsList = [];
-    try {
-      const minLap = Math.max(1, maxLap - 1);
-      lapsList = await fetchResource(
+    // Aggregate OpenF1 pit stops per driver
+    const openF1PitsByDriver = {};
+    openF1Pits.forEach((p) => {
+      if (!p || p.driver_number == null) return;
+      if (!openF1PitsByDriver[p.driver_number]) openF1PitsByDriver[p.driver_number] = [];
+      openF1PitsByDriver[p.driver_number].push({
+        stop: openF1PitsByDriver[p.driver_number].length + 1,
+        lap: p.lap_number || 0,
+        duration: p.pit_duration != null && Number.isFinite(Number(p.pit_duration))
+          ? `${Number(p.pit_duration).toFixed(1)}s`
+          : "-"
+      });
+    });
+
+    const rawSessName = String(sess.session_name || "SESSION").toUpperCase();
+    const sessEndMs = sess.date_end ? Date.parse(sess.date_end) : NaN;
+    const isPreviousResult = Number.isFinite(sessEndMs) && Date.now() > sessEndMs + 15 * 60000;
+
+    await sleepMs(850);
+
+    // Pair 4: race control + recent laps (+ intervals only when live)
+    const minLap = Math.max(1, maxLap - 1);
+    const batch3 = [
+      fetchOpenF1Safe("/api/openf1/race_control", "https://api.openf1.org/v1/race_control?session_key=latest"),
+      fetchOpenF1Safe(
         `/api/openf1/laps?minLap=${minLap}`,
-        `https://api.openf1.org/v1/laps?session_key=latest&lap_number%3E=${minLap}`,
-        "json"
-      );
-    } catch (_) {
-      lapsList = [];
+        `https://api.openf1.org/v1/laps?session_key=latest&lap_number%3E=${minLap}`
+      )
+    ];
+    if (!isPreviousResult) {
+      await sleepMs(450);
+      batch3.push(fetchOpenF1Safe("/api/openf1/intervals", "https://api.openf1.org/v1/intervals?session_key=latest"));
     }
+
+    const [rcRes, lapsRes, intervalsRes] = await Promise.allSettled(batch3);
+    const rcList = rcRes && rcRes.status === "fulfilled" && Array.isArray(rcRes.value) ? rcRes.value : [];
+    const lapsList = lapsRes && lapsRes.status === "fulfilled" && Array.isArray(lapsRes.value) ? lapsRes.value : [];
+    const intervalsList = intervalsRes && intervalsRes.status === "fulfilled" && Array.isArray(intervalsRes.value) ? intervalsRes.value : [];
+
+    const latestGapByDriver = {};
+    intervalsList.forEach((iv) => {
+      if (iv && iv.driver_number != null && iv.gap_to_leader != null) {
+        latestGapByDriver[iv.driver_number] = iv.gap_to_leader;
+      }
+    });
 
     const latestLapByDriver = {};
     let fastestLapOwner = "";
     let fastestLapSec = Infinity;
 
-    if (Array.isArray(lapsList)) {
-      lapsList.forEach((l) => {
-        if (l.lap_number && l.lap_number > maxLap) maxLap = l.lap_number;
-        if (l.lap_duration) {
-          latestLapByDriver[l.driver_number] = l.lap_duration;
-          if (l.lap_duration < fastestLapSec) {
-            fastestLapSec = l.lap_duration;
-            const drv = drivers.find((d) => d.driver_number === l.driver_number);
-            if (drv) fastestLapOwner = drv.name_acronym || "";
-          }
+    lapsList.forEach((l) => {
+      if (l.lap_number && l.lap_number > maxLap) maxLap = l.lap_number;
+      if (l.lap_duration) {
+        latestLapByDriver[l.driver_number] = l.lap_duration;
+        if (l.lap_duration < fastestLapSec) {
+          fastestLapSec = l.lap_duration;
+          const drv = uniqueDrivers.find((d) => d.driver_number === l.driver_number);
+          if (drv) fastestLapOwner = drv.name_acronym || "";
         }
-      });
-    }
+      }
+    });
 
-    const mappedDrivers = drivers
+    // Resolve Jolpica race results, pitstops & standings for enrichment
+    const jolpiBundle = jolpiBundlePromise ? await jolpiBundlePromise.catch(() => ({})) : {};
+    const jMaps = buildJolpiLookupMaps(jolpiBundle.results, jolpiBundle.pitstops, jolpiBundle.standings);
+
+    const sessStartMs = sess.date_start ? Date.parse(sess.date_start) : NaN;
+    const jRaceDateMs = jMaps.resRace && jMaps.resRace.date ? Date.parse(jMaps.resRace.date) : NaN;
+    const sameRaceEvent =
+      Boolean(jMaps.resRace) &&
+      rawSessName.includes("RACE") &&
+      (Number.isNaN(sessStartMs) || Number.isNaN(jRaceDateMs) || Math.abs(sessStartMs - jRaceDateMs) <= 4 * 86400000);
+
+    const raceLeaderLaps =
+      sameRaceEvent && jMaps.results[0] && parseInt(jMaps.results[0].laps, 10)
+        ? parseInt(jMaps.results[0].laps, 10)
+        : maxLap;
+    if (raceLeaderLaps > maxLap) maxLap = raceLeaderLaps;
+
+    let jFastestOwner = "";
+    let jFastestLap = "";
+
+    const mappedDrivers = uniqueDrivers
       .map((d) => {
-        const st = latestStint[d.driver_number] || {};
-        const compRaw = String(st.compound || "M").toUpperCase();
-        const tyreCode = compRaw.startsWith("S") ? "S" : compRaw.startsWith("H") ? "H" : compRaw.startsWith("I") ? "I" : compRaw.startsWith("W") ? "W" : "M";
-        const stintAge = st.lap_end && st.lap_start ? Math.max(1, st.lap_end - st.lap_start + (st.tyre_age_at_start || 0)) : (st.tyre_age_at_start || 0);
-        const pits = Math.max(0, (st.stint_number || 1) - 1);
+        const code = (d.name_acronym || "DRV").toUpperCase();
+        const famLower = String(d.last_name || "").toLowerCase();
+        const numStr = String(d.driver_number || "");
+        const jr = sameRaceEvent
+          ? jMaps.byCodeResult.get(code) || jMaps.byNumResult.get(numStr) || jMaps.byFamilyResult.get(famLower) || null
+          : null;
+        const stRow = jMaps.byCodeStand.get(code) || jMaps.byFamilyStand.get(famLower) || null;
+        const jrDrv = (jr && jr.Driver) || (stRow && stRow.Driver) || {};
+
+        if (jr && jr.FastestLap && jr.FastestLap.rank === "1") {
+          jFastestOwner = code;
+          jFastestLap = (jr.FastestLap.Time && jr.FastestLap.Time.time) || "";
+        }
+
+        const driverStints = (stintsByDriver[d.driver_number] || []).sort((a, b) => (a.stint_number || 0) - (b.stint_number || 0));
+        const st = latestStint[d.driver_number] || driverStints[driverStints.length - 1] || {};
+        const tyreCode = formatF1CompoundCode(st.compound);
+        const stintStart = Number(st.lap_start) || 0;
+        const stintEnd = Number(st.lap_end) || maxStintEndByDriver[d.driver_number] || 0;
+        const stintLaps = stintEnd && stintStart ? Math.max(1, stintEnd - stintStart + 1) : 0;
+        const tyreAge = stintLaps + (Number(st.tyre_age_at_start) || 0);
+
+        const of1Pits = (openF1PitsByDriver[d.driver_number] || []).sort((a, b) => a.lap - b.lap);
+        const jPits = jrDrv.driverId ? jMaps.pitsByDriverId.get(jrDrv.driverId) || [] : [];
+        const pitList = of1Pits.length ? of1Pits : jPits;
+        const pits = pitList.length || Math.max(0, driverStints.length - 1);
+
+        const pos = (jr && parseInt(jr.position, 10)) || latestPos[d.driver_number] || 99;
+        const grid = jr ? parseInt(jr.grid, 10) || 0 : 0;
+        const delta = jr && grid > 0 && pos < 99 ? grid - pos : 0;
+        const lapsDriven =
+          (jr && parseInt(jr.laps, 10)) ||
+          maxStintEndByDriver[d.driver_number] ||
+          (stintEnd > 0 ? stintEnd : maxLap);
+
+        let gapDisplay = "-";
+        if (jr) {
+          gapDisplay = formatF1GapDisplay(jr.Time && jr.Time.time, jr.status, lapsDriven, raceLeaderLaps, pos, isPreviousResult);
+        } else if (pos === 1) {
+          gapDisplay = isPreviousResult ? "WINNER" : "LEADER";
+        } else if (latestGapByDriver[d.driver_number] != null) {
+          const gVal = latestGapByDriver[d.driver_number];
+          gapDisplay = typeof gVal === "number" ? `+${gVal.toFixed(3)}s` : String(gVal);
+        }
+
+        const of1LastLap = formatSecondsToLap(latestLapByDriver[d.driver_number]);
+        const jBestLap = (jr && jr.FastestLap && jr.FastestLap.Time && jr.FastestLap.Time.time) || "";
+        const dob = jrDrv.dateOfBirth || "";
+        const stintSummary = driverStints.map((s) => ({
+          stint: s.stint_number || 1,
+          code: formatF1CompoundCode(s.compound),
+          compound: String(s.compound || "MEDIUM"),
+          lapStart: s.lap_start || 0,
+          lapEnd: s.lap_end || 0,
+          laps: s.lap_end && s.lap_start ? Math.max(1, s.lap_end - s.lap_start + 1) : 0
+        }));
+
         return {
-          pos: latestPos[d.driver_number] || 99,
-          delta: 0,
-          code: (d.name_acronym || "DRV").toUpperCase(),
+          pos,
+          grid,
+          delta,
+          code,
           name: d.full_name || d.broadcast_name || d.name_acronym || "Driver",
-          team: d.team_name || "F1 Team",
+          team: (jr && jr.Constructor && jr.Constructor.name) || d.team_name || "F1 Team",
           color: d.team_colour ? `#${d.team_colour}` : "#e11d48",
-          gap: (latestPos[d.driver_number] || 99) === 1 ? "LEADER" : "-",
-          lastLap: formatSecondsToLap(latestLapByDriver[d.driver_number]),
+          headshot: d.headshot_url || "",
+          number: numStr,
+          nationality: jrDrv.nationality || "",
+          dateOfBirth: dob,
+          age: computeAgeFromDob(dob),
+          laps: lapsDriven,
+          gap: gapDisplay,
+          lastLap: of1LastLap !== "-" ? of1LastLap : jBestLap || "-",
+          fastestLap: jBestLap || (fastestLapOwner === code && Number.isFinite(fastestLapSec) ? formatSecondsToLap(fastestLapSec) : "-"),
+          fastestLapRank: jr && jr.FastestLap ? jr.FastestLap.rank : null,
+          racePoints: jr && jr.points != null ? Number(jr.points) : null,
+          statusText: (jr && jr.status) || (isPreviousResult ? "Classified" : "Running"),
           tyre: tyreCode,
-          tyreAge: stintAge,
-          pits
+          tyreAge,
+          pits,
+          pitDetails: pitList,
+          stintHistory: stintSummary,
+          standing: stRow
+            ? {
+                pos: parseInt(stRow.position, 10) || 0,
+                points: Number(stRow.points) || 0,
+                wins: parseInt(stRow.wins, 10) || 0
+              }
+            : null
         };
       })
       .sort((a, b) => a.pos - b.pos)
-      .slice(0, 14);
+      .slice(0, 22);
 
     // Derive track flag from latest race control item
     let trackStatus = "GREEN";
@@ -1856,11 +2696,7 @@
         }
       : { airTemp: "-", trackTemp: "-", wind: "-" };
 
-    const rawSessName = String(sess.session_name || "SESSION").toUpperCase();
-    const sessEndMs = sess.date_end ? Date.parse(sess.date_end) : NaN;
-    const isPreviousResult = Number.isFinite(sessEndMs) && Date.now() > sessEndMs + 15 * 60000;
-
-    return {
+    const snapshot = {
       id: `openf1-${sess.session_key}`,
       isPreviousResult,
       grandPrix: `${(sess.country_name || sess.location || "FORMULA 1").toUpperCase()} GRAND PRIX`,
@@ -1870,44 +2706,82 @@
       totalLaps: maxLap,
       trackStatus,
       weather,
-      fastestLapOwner: fastestLapOwner || (mappedDrivers[0] ? mappedDrivers[0].code : ""),
-      fastestLapTime: Number.isFinite(fastestLapSec) ? formatSecondsToLap(fastestLapSec) : "-",
+      fastestLapOwner: jFastestOwner || fastestLapOwner || (mappedDrivers[0] ? mappedDrivers[0].code : ""),
+      fastestLapTime: jFastestLap || (Number.isFinite(fastestLapSec) ? formatSecondsToLap(fastestLapSec) : "-"),
       drivers: mappedDrivers,
       raceControlNotes: recentRc.length
         ? recentRc.map((r) => `${r.lap_number ? `Lap ${r.lap_number}: ` : ""}${r.message || r.flag || r.category}`)
         : [`OpenF1 connected: ${sess.location || "Grand Prix"} (${sess.session_name || "Session"})`]
     };
+
+    if (isPreviousResult && (stints.length > 0 || openF1Pits.length > 0)) {
+      openf1CompletedCache = {
+        sessionKey: sess.session_key,
+        ts: Date.now(),
+        snapshot
+      };
+    }
+
+    return snapshot;
   }
 
-  function parseJolpiF1(payload) {
-    const races = payload && payload.MRData && payload.MRData.RaceTable && payload.MRData.RaceTable.Races;
-    if (!Array.isArray(races) || !races.length) return null;
-    const race = races[0];
-    const results = Array.isArray(race.Results) ? race.Results : [];
-    if (!results.length) return null;
+  function parseJolpiF1(payload, jolpiPitsData, jolpiStandingsData) {
+    const maps = buildJolpiLookupMaps(payload, jolpiPitsData, jolpiStandingsData);
+    const race = maps.resRace;
+    const results = maps.results;
+    if (!race || !results.length) return null;
 
+    const leaderLaps = parseInt(results[0].laps, 10) || 50;
     let fastestOwner = "";
     let fastestLap = "-";
-    const drivers = results.slice(0, 14).map((r) => {
+    const drivers = results.slice(0, 22).map((r) => {
       const drv = r.Driver || {};
       const ctor = r.Constructor || {};
+      const code = (drv.code || (drv.familyName || "DRV").slice(0, 3)).toUpperCase();
+      const pos = parseInt(r.position, 10) || 0;
+      const grid = parseInt(r.grid, 10) || 0;
+      const laps = parseInt(r.laps, 10) || 0;
       const isFastest = r.FastestLap && r.FastestLap.rank === "1";
+      const jBestLap = (r.FastestLap && r.FastestLap.Time && r.FastestLap.Time.time) || "-";
       if (isFastest) {
-        fastestOwner = drv.code || (drv.familyName || "").slice(0, 3).toUpperCase();
-        fastestLap = (r.FastestLap.Time && r.FastestLap.Time.time) || "-";
+        fastestOwner = code;
+        fastestLap = jBestLap;
       }
+      const pitList = drv.driverId ? maps.pitsByDriverId.get(drv.driverId) || [] : [];
+      const stRow = maps.byCodeStand.get(code) || maps.byFamilyStand.get(String(drv.familyName || "").toLowerCase()) || null;
+      const dob = drv.dateOfBirth || "";
       return {
-        pos: parseInt(r.position, 10) || 0,
-        delta: (parseInt(r.grid, 10) || 0) - (parseInt(r.position, 10) || 0),
-        code: (drv.code || (drv.familyName || "DRV").slice(0, 3)).toUpperCase(),
+        pos,
+        grid,
+        delta: grid > 0 && pos > 0 ? grid - pos : 0,
+        code,
         name: `${drv.givenName || ""} ${drv.familyName || ""}`.trim(),
         team: ctor.name || "F1 Team",
         color: "#e11d48",
-        gap: r.position === "1" ? "WINNER" : (r.Time && r.Time.time) || r.status || "-",
-        lastLap: (r.FastestLap && r.FastestLap.Time && r.FastestLap.Time.time) || "-",
+        headshot: "",
+        number: String(r.number || drv.permanentNumber || ""),
+        nationality: drv.nationality || "",
+        dateOfBirth: dob,
+        age: computeAgeFromDob(dob),
+        laps,
+        gap: formatF1GapDisplay(r.Time && r.Time.time, r.status, laps, leaderLaps, pos, true),
+        lastLap: jBestLap,
+        fastestLap: jBestLap,
+        fastestLapRank: r.FastestLap ? r.FastestLap.rank : null,
+        racePoints: r.points != null ? Number(r.points) : null,
+        statusText: r.status || "Classified",
         tyre: "M",
         tyreAge: 0,
-        pits: 0
+        pits: pitList.length,
+        pitDetails: pitList,
+        stintHistory: [],
+        standing: stRow
+          ? {
+              pos: parseInt(stRow.position, 10) || 0,
+              points: Number(stRow.points) || 0,
+              wins: parseInt(stRow.wins, 10) || 0
+            }
+          : null
       };
     });
 
@@ -1917,8 +2791,8 @@
       grandPrix: String(race.raceName || "FORMULA 1 GRAND PRIX").toUpperCase(),
       circuit: (race.Circuit && race.Circuit.circuitName) || "F1 Circuit",
       session: "RACE RESULT",
-      lap: parseInt(results[0].laps, 10) || 50,
-      totalLaps: parseInt(results[0].laps, 10) || 50,
+      lap: leaderLaps,
+      totalLaps: leaderLaps,
       trackStatus: "GREEN",
       weather: { airTemp: "-", trackTemp: "-", wind: "-" },
       fastestLapOwner: fastestOwner || (drivers[0] ? drivers[0].code : ""),
@@ -1975,12 +2849,150 @@
     };
   }
 
+  function combineIsoDateAndTime(dateStr, timeStr) {
+    if (!dateStr) return "";
+    if (dateStr.includes("T")) return dateStr;
+    const cleanTime = timeStr ? String(timeStr).trim() : "12:00:00Z";
+    return `${dateStr}T${cleanTime}`;
+  }
+
+  function normalizeEspnSessionLabel(abbr, text) {
+    const raw = `${abbr || ""} ${text || ""}`.trim().toUpperCase();
+    if (raw.includes("FP1")) return "FP1";
+    if (raw.includes("FP2")) return "FP2";
+    if (raw.includes("FP3")) return "FP3";
+    if (raw.includes("SPRINT") && raw.includes("QUAL")) return "Sprint Quali";
+    if (raw.includes("SPRINT") || raw === "SR") return "Sprint";
+    if (raw.includes("QUAL")) return "Qualifying";
+    if (raw.includes("RACE") || raw === "R") return "Grand Prix";
+    return (abbr || text || "Session").trim();
+  }
+
+  function buildF1UpcomingRace(jolpiNextPayload, espnF1Payload) {
+    const races =
+      jolpiNextPayload &&
+      jolpiNextPayload.MRData &&
+      jolpiNextPayload.MRData.RaceTable &&
+      jolpiNextPayload.MRData.RaceTable.Races;
+    const jRace = Array.isArray(races) && races.length ? races[0] : null;
+
+    const espnEvents = Array.isArray(espnF1Payload && espnF1Payload.events) ? espnF1Payload.events : [];
+    const nowMs = Date.now();
+    const espnUpcomingEv =
+      espnEvents.find((ev) => {
+        const endTs = Date.parse(ev.endDate || ev.date || "");
+        return Number.isFinite(endTs) && endTs >= nowMs - 6 * 3600000;
+      }) ||
+      espnEvents[0] ||
+      null;
+
+    if (!jRace && !espnUpcomingEv) return null;
+
+    const sessionsByKey = new Map();
+    const addSession = (label, iso, state) => {
+      if (!iso) return;
+      const ts = Date.parse(iso);
+      if (Number.isNaN(ts)) return;
+      const key = String(label || "Session").toLowerCase();
+      const existing = sessionsByKey.get(key);
+      if (!existing || (!existing.state && state)) {
+        sessionsByKey.set(key, {
+          label,
+          iso,
+          ts,
+          state: state || (ts < nowMs ? "post" : "pre")
+        });
+      }
+    };
+
+    if (jRace) {
+      if (jRace.FirstPractice) addSession("FP1", combineIsoDateAndTime(jRace.FirstPractice.date, jRace.FirstPractice.time));
+      if (jRace.SecondPractice) addSession("FP2", combineIsoDateAndTime(jRace.SecondPractice.date, jRace.SecondPractice.time));
+      if (jRace.ThirdPractice) addSession("FP3", combineIsoDateAndTime(jRace.ThirdPractice.date, jRace.ThirdPractice.time));
+      if (jRace.SprintQualifying || jRace.SprintShootout) {
+        const sq = jRace.SprintQualifying || jRace.SprintShootout;
+        addSession("Sprint Quali", combineIsoDateAndTime(sq.date, sq.time));
+      }
+      if (jRace.Sprint) addSession("Sprint", combineIsoDateAndTime(jRace.Sprint.date, jRace.Sprint.time));
+      if (jRace.Qualifying) addSession("Qualifying", combineIsoDateAndTime(jRace.Qualifying.date, jRace.Qualifying.time));
+      if (jRace.date) addSession("Grand Prix", combineIsoDateAndTime(jRace.date, jRace.time));
+    }
+
+    if (espnUpcomingEv && Array.isArray(espnUpcomingEv.competitions)) {
+      espnUpcomingEv.competitions.forEach((c) => {
+        const label = normalizeEspnSessionLabel(c.type && c.type.abbreviation, c.type && c.type.text);
+        const st = c.status && c.status.type && c.status.type.state;
+        addSession(label, c.date, st);
+      });
+    }
+
+    const sessions = Array.from(sessionsByKey.values()).sort((a, b) => a.ts - b.ts);
+    const raceSess = sessions.find((s) => s.label === "Grand Prix") || sessions[sessions.length - 1] || null;
+
+    const jCircuit = (jRace && jRace.Circuit) || {};
+    const jLoc = jCircuit.Location || {};
+    const espnCircuit = (espnUpcomingEv && espnUpcomingEv.circuit) || {};
+    const espnAddr = espnCircuit.address || {};
+
+    const cityPart = jLoc.locality || espnAddr.city || "";
+    const countryPart = jLoc.country || espnAddr.country || "";
+    const location = [cityPart, countryPart].filter(Boolean).join(", ") || "Circuit Location TBD";
+
+    const gpTitle = (jRace && jRace.raceName) || (espnUpcomingEv && espnUpcomingEv.name) || "Next Formula 1 Grand Prix";
+    const circuitName = jCircuit.circuitName || espnCircuit.fullName || "Grand Prix Circuit";
+
+    const rawCalendar =
+      espnF1Payload &&
+      Array.isArray(espnF1Payload.leagues) &&
+      espnF1Payload.leagues[0] &&
+      Array.isArray(espnF1Payload.leagues[0].calendar)
+        ? espnF1Payload.leagues[0].calendar
+        : [];
+
+    const followingRaces = rawCalendar
+      .filter((item) => {
+        const endTs = Date.parse(item.endDate || item.startDate || "");
+        return Number.isFinite(endTs) && endTs >= nowMs - 12 * 3600000;
+      })
+      .slice(0, 4)
+      .map((item) => ({
+        name: item.label || "Formula 1 Grand Prix",
+        startDate: item.startDate || "",
+        endDate: item.endDate || ""
+      }));
+
+    return {
+      round: jRace && jRace.round ? String(jRace.round) : "",
+      season: (jRace && jRace.season) || String(new Date().getFullYear()),
+      grandPrix: gpTitle,
+      circuit: circuitName,
+      location,
+      country: countryPart,
+      raceDateIso: (raceSess && raceSess.iso) || (jRace ? combineIsoDateAndTime(jRace.date, jRace.time) : espnUpcomingEv.endDate || espnUpcomingEv.date || ""),
+      weekendStartIso: (sessions[0] && sessions[0].iso) || (espnUpcomingEv && espnUpcomingEv.date) || "",
+      sessions,
+      followingRaces
+    };
+  }
+
   const CRICKET_NEWS_EXCLUDED_RE = /\b(women|woman|womens|women's|wpl|wbbl|under-?19|u-?19|u19|sheffield shield|county championship|big bash|bbl|sa20|psl|cpl|the hundred)\b/i;
 
   function extractNewsTickerItems(newsPayload, sport, targetType, targetId) {
-    let articles = Array.isArray(newsPayload && newsPayload.articles) ? newsPayload.articles : [];
+    let articles = [];
+    if (typeof newsPayload === "string" && newsPayload.includes("<item>")) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(newsPayload, "text/xml");
+      articles = Array.from(xmlDoc.querySelectorAll("item")).map((it) => ({
+        headline: ((it.querySelector("title") && it.querySelector("title").textContent) || "").trim(),
+        description: ((it.querySelector("description") && it.querySelector("description").textContent) || "").trim(),
+        published: ((it.querySelector("pubDate") && it.querySelector("pubDate").textContent) || "").trim(),
+        dataSourceIdentifier: ((it.querySelector("guid") && it.querySelector("guid").textContent) || "").trim()
+      }));
+    } else {
+      articles = Array.isArray(newsPayload && newsPayload.articles) ? newsPayload.articles : [];
+    }
     if (sport === "cricket") {
-      articles = articles.filter((a) => !CRICKET_NEWS_EXCLUDED_RE.test(`${a.headline || ""} ${a.description || ""}`));
+      articles = articles.filter((a) => a.headline && !CRICKET_NEWS_EXCLUDED_RE.test(`${a.headline || ""} ${a.description || ""}`));
     }
     return articles.slice(0, 4).map((a, idx) => ({
       id: `news-${sport}-${idx}-${(a.dataSourceIdentifier || a.headline || "").slice(0, 12)}`,
@@ -2004,8 +3016,8 @@
       f1Source: "None"
     };
 
-    // 1. Football: Always fetch current leagues + global slate + recent previous days
-    const pastFbDates = getRecentUtcDateStrings(3);
+    // 1. Football: Always fetch current leagues + global slate + today/tomorrow/recent previous days
+    const pastFbDates = getRecentUtcDateStrings(3, true);
     const pastFbTargets = [
       ...pastFbDates.map((d) => ({ code: "all", key: "ALL", name: "International / Club", date: d })),
       { code: "uefa.nations", key: "UNL", name: "UEFA Nations League", date: pastFbDates[0] },
@@ -2114,7 +3126,16 @@
     }
 
     if (!cricketMatches.length) {
-      const pastCrDates = getRecentUtcDateStrings(6);
+      const crDateOffsets = getUtcDateOffsetList(14, 7).sort(
+        (a, b) => Math.abs(a.offset) - Math.abs(b.offset) || a.offset - b.offset
+      );
+      const nowMs = Date.now();
+      const uncachedDateTargets = crDateOffsets.filter((entry) => {
+        if (Math.abs(entry.offset) <= 2) return true;
+        const cached = cricketDatePanelCache.get(entry.date);
+        return !cached || nowMs - cached.ts > CRICKET_EXTENDED_PANEL_TTL_MS;
+      });
+
       const [spRes, hdRes, iplRes, pastSpResults] = await Promise.all([
         fetchResource(
           "/api/cricket/espn-scorepanel",
@@ -2132,13 +3153,14 @@
           "json"
         ).catch(() => null),
         Promise.allSettled(
-          pastCrDates.map((d) =>
-            fetchResource(
-              `/api/cricket/espn-scorepanel?dates=${d}`,
-              `https://site.web.api.espn.com/apis/site/v2/sports/cricket/scorepanel?dates=${d}`,
+          uncachedDateTargets.map(async (entry) => ({
+            entry,
+            payload: await fetchResource(
+              `/api/cricket/espn-scorepanel?dates=${entry.date}`,
+              `https://site.web.api.espn.com/apis/site/v2/sports/cricket/scorepanel?dates=${entry.date}`,
               "json"
             )
-          )
+          }))
         )
       ]);
 
@@ -2185,11 +3207,36 @@
       }
 
       pastSpResults.forEach((res) => {
-        if (res.status === "fulfilled" && res.value) {
+        if (res.status === "fulfilled" && res.value && res.value.payload) {
           cricketFetchOk = true;
-          const parsedPast = parseEspnCricketScorepanel(res.value);
-          parsedPast.matches.forEach((m) => {
+          const { entry, payload } = res.value;
+          const parsedDatePanel = parseEspnCricketScorepanel(payload);
+          if (Math.abs(entry.offset) > 2) {
+            cricketDatePanelCache.set(entry.date, {
+              ts: Date.now(),
+              matches: parsedDatePanel.matches,
+              seenLeagueIds: Array.from(parsedDatePanel.seenLeagueIds)
+            });
+          }
+          parsedDatePanel.matches.forEach((m) => {
             if (!espnById.has(m.id)) espnById.set(m.id, m);
+          });
+        }
+      });
+
+      crDateOffsets.forEach((entry) => {
+        if (Math.abs(entry.offset) <= 2) return;
+        const cached = cricketDatePanelCache.get(entry.date);
+        if (cached && cached.matches) {
+          cricketFetchOk = true;
+          cached.matches.forEach((m) => {
+            if (!espnById.has(m.id)) {
+              espnById.set(m.id, {
+                ...m,
+                team1: { ...m.team1 },
+                team2: { ...m.team2 }
+              });
+            }
           });
         }
       });
@@ -2204,12 +3251,12 @@
           }
           return 0;
         })
-        .slice(0, 16);
+        .slice(0, 20);
 
       const previousCricket = allCricket
         .filter((m) => m.status === "FT")
         .sort((a, b) => (b.eventTimestamp || 0) - (a.eventTimestamp || 0))
-        .slice(0, 16);
+        .slice(0, 24);
 
       cricketMatches = [...activeCricket, ...previousCricket];
 
@@ -2252,40 +3299,66 @@
       }
     }
 
-    // 3. Formula 1: OpenF1 -> Jolpica-F1 -> ESPN F1
-    let f1Session = null;
-    try {
-      f1Session = await fetchOpenF1Snapshot();
-      if (f1Session) feedReport.f1Source = `OpenF1 (${f1Session.session})`;
-    } catch (_) {
-      f1Session = null;
+    // 3. Formula 1: OpenF1 (batched) + Jolpica F1 (Results, Pitstops, Standings) -> ESPN F1 (+ Upcoming Race Schedule)
+    const jolpiBundlePromise = Promise.all([
+      fetchResource("/api/jolpi/f1", "https://api.jolpi.ca/ergast/f1/current/last/results.json", "json").catch(() => null),
+      fetchResource("/api/jolpi/f1/pitstops", "https://api.jolpi.ca/ergast/f1/current/last/pitstops.json?limit=100", "json").catch(() => null),
+      fetchResource("/api/jolpi/f1/standings", "https://api.jolpi.ca/ergast/f1/current/driverStandings.json", "json").catch(() => null)
+    ]).then(([results, pitstops, standings]) => ({ results, pitstops, standings }));
+
+    const [openF1Attempt, jolpiNextRes, espnF1Res, jolpiBundle] = await Promise.all([
+      fetchOpenF1Snapshot(jolpiBundlePromise).catch(() => null),
+      fetchResource("/api/jolpi/f1/next", "https://api.jolpi.ca/ergast/f1/current/next.json", "json").catch(() => null),
+      fetchResource("/api/espn/f1", "https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard", "json").catch(() => null),
+      jolpiBundlePromise
+    ]);
+
+    let f1Session = openF1Attempt;
+    if (f1Session) {
+      feedReport.f1Source = `OpenF1 + Jolpica (${f1Session.session})`;
     }
 
-    if (!f1Session) {
+    if (!f1Session && jolpiBundle && jolpiBundle.results) {
       try {
-        const jolpiData = await fetchResource(
-          "/api/jolpi/f1",
-          "https://api.jolpi.ca/ergast/f1/current/last/results.json",
-          "json"
-        );
-        f1Session = parseJolpiF1(jolpiData);
+        f1Session = parseJolpiF1(jolpiBundle.results, jolpiBundle.pitstops, jolpiBundle.standings);
         if (f1Session) feedReport.f1Source = "Jolpica F1 (Latest GP)";
       } catch (_) {
         f1Session = null;
       }
     }
 
-    if (!f1Session) {
+    if (!f1Session && espnF1Res) {
       try {
-        const espnF1 = await fetchResource(
-          "/api/espn/f1",
-          "https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard",
-          "json"
-        );
-        f1Session = parseEspnF1(espnF1);
+        f1Session = parseEspnF1(espnF1Res);
         if (f1Session) feedReport.f1Source = "ESPN F1";
       } catch (_) {
         f1Session = null;
+      }
+    }
+
+    const upcomingF1 = buildF1UpcomingRace(jolpiNextRes, espnF1Res);
+    if (!f1Session && upcomingF1) {
+      f1Session = {
+        id: `upcoming-f1-${upcomingF1.season}-${upcomingF1.round || "next"}`,
+        isPreviousResult: true,
+        grandPrix: upcomingF1.grandPrix.toUpperCase(),
+        circuit: upcomingF1.circuit,
+        session: "UPCOMING GP",
+        lap: 0,
+        totalLaps: 50,
+        trackStatus: "GREEN",
+        weather: { airTemp: "-", trackTemp: "-", wind: "-" },
+        fastestLapOwner: "-",
+        fastestLapTime: "-",
+        drivers: [],
+        raceControlNotes: [`Next GP: ${upcomingF1.grandPrix} (${upcomingF1.location})`]
+      };
+      feedReport.f1Source = "Jolpica / ESPN F1 (Schedule)";
+    }
+    if (f1Session && upcomingF1) {
+      f1Session.upcomingRace = upcomingF1;
+      if (feedReport.f1Source && !feedReport.f1Source.includes("Next:")) {
+        feedReport.f1Source = `${feedReport.f1Source} + Next: ${upcomingF1.grandPrix}`;
       }
     }
 
@@ -2299,12 +3372,17 @@
         crToEnrich.push(m);
       }
     });
+    cricketMatches.forEach((m) => {
+      if (crToEnrich.length < 3 && m.status === "FT" && m.leagueId && m.rawEventId && !crToEnrich.includes(m)) {
+        crToEnrich.push(m);
+      }
+    });
 
     const [summaryRes, crSummaryResults, fbNewsRes, crNewsRes, f1NewsRes] = await Promise.all([
       spotlightFb ? fetchFootballMatchSummary(spotlightFb).catch(() => null) : Promise.resolve(null),
       Promise.allSettled(crToEnrich.map((cm) => fetchCricketMatchSummary(cm))),
       fetchResource("/api/espn/soccer/news", "https://site.api.espn.com/apis/site/v2/sports/soccer/all/news?limit=10", "json").catch(() => null),
-      fetchResource("/api/cricket/news", "https://site.api.espn.com/apis/site/v2/sports/cricket/news?limit=8", "json").catch(() => null),
+      fetchResource("/api/cricket/news", "https://www.espncricinfo.com/rss/content/story/feeds/0.xml", "text").catch(() => null),
       fetchResource("/api/espn/f1/news", "https://site.api.espn.com/apis/site/v2/sports/racing/f1/news?limit=8", "json").catch(() => null)
     ]);
 
@@ -2419,6 +3497,21 @@
         text: `${f1Session.grandPrix} — P1 ${p1.name} (${p1.team})${f1Session.fastestLapOwner ? ` • Fastest: ${f1Session.fastestLapOwner} ${f1Session.fastestLapTime}` : ""}`
       });
     }
+    if (f1Session && f1Session.upcomingRace) {
+      const nextGp = f1Session.upcomingRace;
+      const gpWhen = nextGp.raceDateIso
+        ? new Date(nextGp.raceDateIso).toLocaleDateString([], { month: "short", day: "numeric" })
+        : "TBD";
+      liveTicker.push({
+        id: `upcoming-f1-${nextGp.round || nextGp.grandPrix}`,
+        sport: "f1",
+        tag: "NEXT F1 GP",
+        time: gpWhen,
+        targetType: "f1",
+        targetId: "f1-upcoming",
+        text: `${nextGp.round ? `R${nextGp.round} ` : ""}${nextGp.grandPrix} at ${nextGp.circuit} (${nextGp.location})`
+      });
+    }
 
     // Add ESPN live wire headlines across all three sports
     if (fbNewsRes) {
@@ -2449,9 +3542,453 @@
     };
   }
 
+  /* --------------------------------------------------------------------------
+     Player Profile, Photo & ICC Rankings Engine (Football & Cricket Popovers)
+     -------------------------------------------------------------------------- */
+  const playerProfileCache = new Map();
+  const wikiProfileCache = new Map();
+  const iccRankingsCache = { men: null, women: null };
+  const PROFILE_CACHE_TTL_MS = 15 * 60 * 1000;
+
+  function normalizePersonName(name) {
+    return String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\((c|wk)\)/g, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildCricbuzzSlug(name) {
+    return normalizePersonName(name).replace(/\s+/g, "-") || "player";
+  }
+
+  function decodeNextFlightText(html) {
+    const raw = String(html || "");
+    const parts = [];
+    const re = /self\.__next_f\.push\((\[1,"(?:[^"\\]|\\.)*"\])\)/g;
+    let m;
+    while ((m = re.exec(raw)) !== null) {
+      try {
+        const arr = JSON.parse(m[1]);
+        if (typeof arr[1] === "string") parts.push(arr[1]);
+      } catch (_) {
+        parts.push(m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
+      }
+    }
+    if (parts.length) return parts.join("\n");
+    return raw.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+
+  function extractBalancedJsonAfter(text, marker) {
+    if (!text) return null;
+    let idx = text.indexOf(marker);
+    if (idx < 0) return null;
+    let start = text.indexOf("{", idx + marker.length);
+    if (start < 0) return null;
+
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text.charAt(i);
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === "\\" && inStr) {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = !inStr;
+        continue;
+      }
+      if (!inStr) {
+        if (ch === "{") depth += 1;
+        else if (ch === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            try {
+              return JSON.parse(text.slice(start, i + 1));
+            } catch (_) {
+              return null;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  async function fetchWikipediaProfile(name, sportHint) {
+    const cleanName = String(name || "").replace(/\s+/g, " ").trim();
+    if (!cleanName) return {};
+    const cacheKey = `${sportHint}:${cleanName.toLowerCase()}`;
+    const cached = wikiProfileCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < PROFILE_CACHE_TTL_MS) return cached.data;
+
+    const sportRe =
+      sportHint === "cricketer"
+        ? /cricket|batsman|batter|bowler|all-rounder|wicket/i
+        : /football|soccer|midfielder|forward|defender|goalkeeper|striker|winger/i;
+
+    const trySummary = async (titleStr, requireSportMatch) => {
+      const enc = encodeURIComponent(String(titleStr || "").trim().replace(/\s+/g, "_"));
+      const data = await fetchResource(
+        `/api/wiki/summary?title=${encodeURIComponent(titleStr)}`,
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${enc}`,
+        "json",
+        { timeoutMs: 5000 }
+      ).catch(() => null);
+      if (!data || data.type === "disambiguation" || !data.title) return null;
+      const meta = `${data.description || ""} ${data.extract || ""}`;
+      if (requireSportMatch && !sportRe.test(meta)) return null;
+      return {
+        photo: (data.thumbnail && data.thumbnail.source) || "",
+        description: data.description || "",
+        wikiTitle: data.title || ""
+      };
+    };
+
+    let res = await trySummary(cleanName, true);
+    if (!res) {
+      const q = `${cleanName} ${sportHint}`;
+      const srch = await fetchResource(
+        `/api/wiki/search?q=${encodeURIComponent(q)}`,
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&srlimit=2&origin=*`,
+        "json",
+        { timeoutMs: 5000 }
+      ).catch(() => null);
+      const hitTitle =
+        srch && srch.query && Array.isArray(srch.query.search) && srch.query.search[0]
+          ? srch.query.search[0].title
+          : "";
+      if (hitTitle) {
+        res = await trySummary(hitTitle, false);
+      }
+    }
+
+    const finalObj = res || {};
+    wikiProfileCache.set(cacheKey, { ts: Date.now(), data: finalObj });
+    return finalObj;
+  }
+
+  async function fetchIccRankingsMap(gender) {
+    const gKey = gender === "women" ? "women" : "men";
+    const cached = iccRankingsCache[gKey];
+    if (cached && Date.now() - cached.ts < PROFILE_CACHE_TTL_MS * 2) {
+      return cached.map;
+    }
+
+    const categories = [
+      { cat: "batting", prefix: "bat" },
+      { cat: "bowling", prefix: "bowl" },
+      { cat: "all-rounder", prefix: "all" }
+    ];
+
+    const responses = await Promise.allSettled(
+      categories.map((c) =>
+        fetchResource(
+          `/api/cricket/icc-rankings?cat=${c.cat}&gender=${gKey}`,
+          "",
+          "text",
+          { timeoutMs: 7000 }
+        )
+      )
+    );
+
+    const byNormName = new Map();
+    const formats = ["test", "odi", "t20"];
+
+    responses.forEach((res, cIdx) => {
+      if (res.status !== "fulfilled" || !res.value) return;
+      const prefix = categories[cIdx].prefix;
+      const decoded = decodeNextFlightText(res.value);
+      const fmtData = extractBalancedJsonAfter(decoded, '"formatTypesData":');
+      if (!fmtData || typeof fmtData !== "object") return;
+
+      formats.forEach((fmt) => {
+        const list = fmtData[fmt] && Array.isArray(fmtData[fmt].rank) ? fmtData[fmt].rank : [];
+        list.forEach((item) => {
+          if (!item || !item.name) return;
+          const norm = normalizePersonName(item.name);
+          if (!norm) return;
+          let entry = byNormName.get(norm);
+          if (!entry) {
+            entry = {
+              cbId: item.id ? String(item.id) : "",
+              cbName: item.name,
+              cbSlug: buildCricbuzzSlug(item.name),
+              country: item.country || "",
+              normTokens: norm.split(" ").filter(Boolean),
+              ranks: {}
+            };
+            byNormName.set(norm, entry);
+          } else if (!entry.cbId && item.id) {
+            entry.cbId = String(item.id);
+          }
+          entry.ranks[`${fmt}_${prefix}`] = {
+            rank: parseInt(item.rank, 10) || item.rank,
+            rating: parseInt(item.rating || item.points, 10) || item.rating || ""
+          };
+        });
+      });
+    });
+
+    iccRankingsCache[gKey] = { ts: Date.now(), map: byNormName };
+    return byNormName;
+  }
+
+  function findIccRankingEntry(iccMap, playerName, teamHint) {
+    if (!iccMap || !iccMap.size || !playerName) return null;
+    const norm = normalizePersonName(playerName);
+    if (!norm) return null;
+    if (iccMap.has(norm)) return iccMap.get(norm);
+
+    const targetTokens = norm.split(" ").filter(Boolean);
+    const teamLower = String(teamHint || "").toLowerCase();
+    let best = null;
+    let bestScore = 0;
+
+    iccMap.forEach((entry) => {
+      const eTokens = entry.normTokens || [];
+      if (!eTokens.length) return;
+      const allEntryInTarget = eTokens.every((t) => targetTokens.includes(t));
+      const allTargetInEntry = targetTokens.every((t) => eTokens.includes(t));
+      if (!allEntryInTarget && !allTargetInEntry) {
+        // Check initial + surname match (e.g. "S Gill" vs "Shubman Gill", "KL Rahul")
+        const lastSame = eTokens[eTokens.length - 1] === targetTokens[targetTokens.length - 1];
+        const firstCompat =
+          eTokens[0] &&
+          targetTokens[0] &&
+          (eTokens[0].charAt(0) === targetTokens[0].charAt(0)) &&
+          (eTokens[0].length === 1 || targetTokens[0].length === 1);
+        if (!(lastSame && firstCompat && eTokens.length >= 2 && targetTokens.length >= 2)) return;
+      }
+
+      let score = Math.min(eTokens.length, targetTokens.length) * 10;
+      if (entry.country && teamLower && teamLower.includes(entry.country.toLowerCase())) {
+        score += 20;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = entry;
+      }
+    });
+
+    return best;
+  }
+
+  function formatCricbuzzCareerTable(statsBlock) {
+    if (!statsBlock || !Array.isArray(statsBlock.headers) || !Array.isArray(statsBlock.values)) return null;
+    const formats = statsBlock.headers.slice(1);
+    const rows = [];
+    statsBlock.values.forEach((r) => {
+      if (!r || !Array.isArray(r.values) || !r.values.length) return;
+      rows.push({
+        label: r.values[0],
+        cols: r.values.slice(1)
+      });
+    });
+    return formats.length && rows.length ? { formats, rows } : null;
+  }
+
+  async function fetchFootballPlayerProfile(hint) {
+    const id = hint && hint.id ? String(hint.id) : "";
+    const name = (hint && hint.name) || "Player";
+
+    const [athRes, ovRes, wikiFallback] = await Promise.all([
+      id
+        ? fetchResource(
+            `/api/soccer/athlete?id=${encodeURIComponent(id)}`,
+            `https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/${encodeURIComponent(id)}`,
+            "json",
+            { timeoutMs: 6500 }
+          ).catch(() => null)
+        : Promise.resolve(null),
+      id
+        ? fetchResource(
+            `/api/soccer/athlete-overview?id=${encodeURIComponent(id)}`,
+            `https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/${encodeURIComponent(id)}/overview`,
+            "json",
+            { timeoutMs: 6500 }
+          ).catch(() => null)
+        : Promise.resolve(null),
+      hint && hint.headshot ? Promise.resolve({}) : fetchWikipediaProfile(name, "footballer")
+    ]);
+
+    const a = (athRes && athRes.athlete) || {};
+    const espnPhoto = (a.headshot && a.headshot.href) || (hint && hint.headshot) || "";
+    const resolvedName = a.displayName || name;
+    let wiki = wikiFallback || {};
+    if (!espnPhoto && !wiki.photo && resolvedName) {
+      wiki = await fetchWikipediaProfile(resolvedName, "footballer").catch(() => ({}));
+    }
+
+    const summaryList =
+      a.statsSummary && Array.isArray(a.statsSummary.statistics)
+        ? a.statsSummary.statistics
+            .filter((s) => s && s.displayName && s.displayValue !== undefined && s.displayValue !== "")
+            .map((s) => ({ label: s.displayName, value: String(s.displayValue) }))
+        : [];
+
+    const ovStats = ovRes && ovRes.statistics ? ovRes.statistics : null;
+    const labels = ovStats && Array.isArray(ovStats.labels) ? ovStats.labels : [];
+    const splits =
+      ovStats && Array.isArray(ovStats.splits)
+        ? ovStats.splits.slice(0, 5).map((sp) => ({
+            competition: sp.displayName || "Competition",
+            values: Array.isArray(sp.stats) ? sp.stats : []
+          }))
+        : [];
+
+    return {
+      sport: "football",
+      name: resolvedName,
+      photo: espnPhoto || wiki.photo || "",
+      bioNote: wiki.description || "",
+      club: (a.team && (a.team.displayName || a.team.shortDisplayName)) || (hint && hint.team) || "-",
+      nationality: a.citizenship || "-",
+      flagUrl: (a.flag && a.flag.href) || "",
+      position: (a.position && (a.position.displayName || a.position.name)) || (hint && hint.pos) || "-",
+      jersey: a.jersey ? String(a.jersey) : (hint && hint.jersey) || "-",
+      age: a.age || computeAgeFromDob(a.dateOfBirth) || "-",
+      height: a.displayHeight || "-",
+      weight: a.displayWeight || "-",
+      matchStats: (hint && hint.matchStats) || null,
+      seasonTitle: (a.statsSummary && a.statsSummary.displayName) || "Season Summary",
+      summaryStats: summaryList,
+      seasonLabels: labels,
+      seasonSplits: splits
+    };
+  }
+
+  async function fetchCricketPlayerProfile(hint) {
+    const id = hint && hint.id ? String(hint.id) : "";
+    const name = (hint && hint.name) || "Cricketer";
+    const teamHint = (hint && hint.team) || "";
+    const isWomen = /women/i.test(`${teamHint} ${(hint && hint.series) || ""}`);
+    const gender = isWomen ? "women" : "men";
+
+    const [athRes, iccMap] = await Promise.all([
+      id
+        ? fetchResource(
+            `/api/cricket/athlete?id=${encodeURIComponent(id)}`,
+            `https://site.web.api.espn.com/apis/common/v3/sports/cricket/athletes/${encodeURIComponent(id)}`,
+            "json",
+            { timeoutMs: 6500 }
+          ).catch(() => null)
+        : Promise.resolve(null),
+      fetchIccRankingsMap(gender).catch(() => new Map())
+    ]);
+
+    const a = (athRes && athRes.athlete) || {};
+    const displayName = a.displayName || name;
+    const explicitHeadshot = (a.headshot && a.headshot.href) || "";
+    const cdnHeadshotFallback = id ? `https://a.espncdn.com/i/headshots/cricket/players/full/${id}.png` : "";
+    const espnPhoto = explicitHeadshot || cdnHeadshotFallback;
+    const cbEntry = findIccRankingEntry(iccMap, displayName, teamHint) || findIccRankingEntry(iccMap, name, teamHint);
+
+    const [cbHtmlRes, wikiRes] = await Promise.all([
+      cbEntry && cbEntry.cbId
+        ? fetchResource(
+            `/api/cricket/cb-profile?id=${encodeURIComponent(cbEntry.cbId)}&slug=${encodeURIComponent(cbEntry.cbSlug)}`,
+            "",
+            "text",
+            { timeoutMs: 7000 }
+          ).catch(() => null)
+        : Promise.resolve(null),
+      !explicitHeadshot ? fetchWikipediaProfile(displayName, "cricketer") : Promise.resolve({})
+    ]);
+
+    let playerData = null;
+    let battingTable = null;
+    let bowlingTable = null;
+    if (cbHtmlRes) {
+      const decoded = decodeNextFlightText(cbHtmlRes);
+      playerData = extractBalancedJsonAfter(decoded, '"playerData":');
+      battingTable = formatCricbuzzCareerTable(extractBalancedJsonAfter(decoded, '"battingStats":'));
+      bowlingTable = formatCricbuzzCareerTable(extractBalancedJsonAfter(decoded, '"bowlingStats":'));
+    }
+
+    let ageVal = a.age || computeAgeFromDob(a.dateOfBirth);
+    if (!ageVal && playerData && playerData.DoB) {
+      const mAge = String(playerData.DoB).match(/\((\d+)\s+years/i);
+      if (mAge) ageVal = parseInt(mAge[1], 10);
+    }
+
+    const rMap = (cbEntry && cbEntry.ranks) || {};
+    const pRanks = (playerData && playerData.rankings) || {};
+    const buildRankCell = (key, fallbackVal, bestVal) => {
+      const item = rMap[key];
+      const rank = item && item.rank ? item.rank : fallbackVal || null;
+      const rating = item && item.rating ? item.rating : null;
+      return rank || bestVal ? { rank: rank || null, rating, best: bestVal || null } : null;
+    };
+
+    const iccRankings = {
+      batting: {
+        test: buildRankCell("test_bat", pRanks.bat && pRanks.bat.testRank, pRanks.bat && pRanks.bat.testBestRank),
+        odi: buildRankCell("odi_bat", pRanks.bat && pRanks.bat.odiRank, pRanks.bat && pRanks.bat.odiBestRank),
+        t20: buildRankCell("t20_bat", pRanks.bat && pRanks.bat.t20Rank, pRanks.bat && pRanks.bat.t20BestRank)
+      },
+      bowling: {
+        test: buildRankCell("test_bowl", pRanks.bowl && pRanks.bowl.testRank, pRanks.bowl && pRanks.bowl.testBestRank),
+        odi: buildRankCell("odi_bowl", pRanks.bowl && pRanks.bowl.odiRank, pRanks.bowl && pRanks.bowl.odiBestRank),
+        t20: buildRankCell("t20_bowl", pRanks.bowl && pRanks.bowl.t20Rank, pRanks.bowl && pRanks.bowl.t20BestRank)
+      },
+      allRounder: {
+        test: buildRankCell("test_all", pRanks.all && pRanks.all.testRank, pRanks.all && pRanks.all.testBestRank),
+        odi: buildRankCell("odi_all", pRanks.all && pRanks.all.odiRank, pRanks.all && pRanks.all.odiBestRank),
+        t20: buildRankCell("t20_all", pRanks.all && pRanks.all.t20Rank, pRanks.all && pRanks.all.t20BestRank)
+      }
+    };
+
+    return {
+      sport: "cricket",
+      name: (playerData && playerData.name) || displayName,
+      fullName: (playerData && playerData.fullName) || displayName,
+      photo: espnPhoto || (wikiRes && wikiRes.photo) || "",
+      fallbackPhoto: (wikiRes && wikiRes.photo) || "",
+      team: (playerData && playerData.intlTeam) || (a.team && a.team.displayName) || teamHint || (cbEntry && cbEntry.country) || "-",
+      flagUrl: (a.flag && a.flag.href) || "",
+      age: ageVal || "-",
+      dob: (playerData && playerData.DoBFormat) || "",
+      birthPlace: (playerData && playerData.birthPlace) || "",
+      role: (playerData && playerData.role) || (a.position && a.position.name) || (hint && hint.role) || "-",
+      batStyle: (a.batStyle && a.batStyle.description) || (playerData && playerData.bat) || "-",
+      bowlStyle: (a.bowlStyle && a.bowlStyle.description) || (playerData && playerData.bowl) || "-",
+      iccRankings,
+      careerBatting: battingTable,
+      careerBowling: bowlingTable,
+      matchStats: (hint && hint.matchStats) || null
+    };
+  }
+
+  async function fetchPlayerProfile(hint) {
+    const sport = hint && hint.sport;
+    const key = `${sport}:${(hint && hint.id) || ""}:${normalizePersonName(hint && hint.name)}:${normalizePersonName(hint && hint.team)}`;
+    const cached = playerProfileCache.get(key);
+    if (cached && Date.now() - cached.ts < PROFILE_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    const data =
+      sport === "cricket"
+        ? await fetchCricketPlayerProfile(hint)
+        : await fetchFootballPlayerProfile(hint);
+    playerProfileCache.set(key, { ts: Date.now(), data });
+    return data;
+  }
+
   Apex.liveFeed = {
     fetchLiveSnapshot,
     fetchFootballMatchSummary,
-    fetchCricketMatchSummary
+    fetchCricketMatchSummary,
+    fetchCricketPlayByPlay,
+    fetchPlayerProfile
   };
 })(window);

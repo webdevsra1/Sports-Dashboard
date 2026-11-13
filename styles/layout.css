@@ -297,7 +297,7 @@ body {
 
 @media (min-width: 1200px) {
   .dashboard-main {
-    grid-template-columns: 1.38fr 1.02fr 1.02fr;
+    grid-template-columns: minmax(340px, 1.12fr) minmax(440px, 1.44fr) minmax(330px, 0.94fr);
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
@@ -417,32 +417,147 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+@media (min-width: 1200px) and (min-height: 680px) {
+  .panel-football .panel-body,
+  .panel-cricket .panel-body {
+    overflow: hidden;
+  }
+
+  .panel-football .football-hero-card,
+  .panel-football .filter-pills,
+  .panel-cricket .cricket-hero {
+    flex-shrink: 0;
+  }
+
+  .panel-cricket .cricket-layout-split {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panel-cricket .cricket-other-list {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-main:not(.focus-single) .panel-cricket .cricket-hero {
+    max-height: 41%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 12px;
+    gap: 7px;
+  }
+
+  .panel-football .matches-split-sections,
+  .panel-cricket .matches-split-sections {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dashboard-main:not(.focus-single) .panel-cricket .matches-split-sections {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .panel-football .match-split-box,
+  .panel-cricket .match-split-box {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-main:not(.focus-single) .panel-cricket .match-split-box {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .panel-football .match-split-list,
+  .panel-cricket .match-split-list {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .dashboard-main.focus-single .panel-f1 .f1-tower-wrap {
+    flex: 1 0 360px;
+    min-height: 360px;
+    max-height: none;
+  }
+}
+
 /* Expanded single-sport layout */
-.dashboard-main.focus-single .panel-football .matches-split-sections {
+.dashboard-main.focus-single .panel-football .panel-body,
+.dashboard-main.focus-single .panel-cricket .panel-body {
+  overflow: hidden;
+}
+
+.dashboard-main.focus-single .panel-football .matches-split-sections,
+.dashboard-main.focus-single .panel-cricket .matches-split-sections {
+  flex: 1;
+  min-height: 0;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
 }
 
+.dashboard-main.focus-single .match-split-box {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .dashboard-main.focus-single .match-split-list {
-  max-height: 540px;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 .dashboard-main.focus-single .cricket-layout-split {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
   gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-main.focus-single .panel-cricket .cricket-hero {
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dashboard-main.focus-single .cricket-other-list {
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
+  .dashboard-main.focus-single .panel-football .panel-body,
+  .dashboard-main.focus-single .panel-cricket .panel-body {
+    overflow-y: auto;
+  }
+
   .dashboard-main.focus-single .panel-football .matches-split-sections,
+  .dashboard-main.focus-single .panel-cricket .matches-split-sections,
   .dashboard-main.focus-single .cricket-layout-split {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+
+  .dashboard-main.focus-single .match-split-list {
+    max-height: 265px;
   }
 }
 
