@@ -1308,24 +1308,37 @@
           })()
         : "";
 
-    return {
-      title: isDriverModal
-        ? `${focusedDriver.name} (${focusedDriver.code}) — ${f1.grandPrix}`
-        : targetId === "f1-upcoming" && upcoming
-        ? `${upcoming.grandPrix} — Upcoming Weekend Schedule`
-        : `${f1.grandPrix} — Race Control & Telemetry`,
-      body: `
-        ${driverSpotlight}
-        ${!isDriverModal && targetId === "f1-upcoming" ? upcomingSection : ""}
+    const isUpcomingModal = !isDriverModal && targetId === "f1-upcoming";
+    const telemetryBadgesHtml = !isUpcomingModal
+      ? `
         <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;">
           <span class="status-badge is-live">LAP ${escapeHtml(f1.lap)}/${escapeHtml(f1.totalLaps)}</span>
           <span class="status-badge is-ft">FASTEST: ${escapeHtml(f1.fastestLapOwner || "-")} (${escapeHtml(f1.fastestLapTime || "-")})</span>
           <span class="status-badge is-pre">TRACK ${escapeHtml(f1.weather.trackTemp)} • AIR ${escapeHtml(f1.weather.airTemp)}</span>
         </div>
-        ${!isDriverModal && targetId !== "f1-upcoming" ? upcomingSection : ""}
+      `
+      : "";
+    const raceControlHtml = !isUpcomingModal
+      ? `
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);text-transform:uppercase;">Race Control Log</div>
         <div class="timeline-list">${notesHtml}</div>
       `
+      : "";
+
+    return {
+      title: isDriverModal
+        ? `${focusedDriver.name} (${focusedDriver.code}) — ${f1.grandPrix}`
+        : isUpcomingModal && upcoming
+        ? `${upcoming.grandPrix} — Upcoming Weekend Schedule`
+        : `${f1.grandPrix} — Race Control & Telemetry`,
+      body: isUpcomingModal
+        ? (upcomingSection || `<div class="empty-state is-compact">Upcoming Grand Prix schedule is currently unavailable.</div>`)
+        : `
+          ${driverSpotlight}
+          ${telemetryBadgesHtml}
+          ${!isDriverModal ? upcomingSection : ""}
+          ${raceControlHtml}
+        `
     };
   }
 
