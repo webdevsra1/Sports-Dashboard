@@ -14,17 +14,63 @@
   const Apex = (root.ApexSports = root.ApexSports || {});
 
   const SOCCER_LEAGUES = [
+    // Senior men's national team competitions ("main line" international squads)
     { code: "uefa.nations", key: "UNL", name: "UEFA Nations League" },
+    { code: "concacaf.nations.league", key: "INTL", name: "Concacaf Nations League" },
+    { code: "fifa.world", key: "WORLD", name: "FIFA World Cup" },
+    { code: "fifa.worldq.uefa", key: "WCQ", name: "WC Qualifiers UEFA" },
+    { code: "fifa.worldq.conmebol", key: "WCQ", name: "WC Qualifiers CONMEBOL" },
+    { code: "fifa.worldq.concacaf", key: "WCQ", name: "WC Qualifiers Concacaf" },
+    { code: "fifa.worldq.afc", key: "WCQ", name: "WC Qualifiers AFC" },
+    { code: "fifa.worldq.caf", key: "WCQ", name: "WC Qualifiers CAF" },
+    { code: "fifa.worldq.ofc", key: "WCQ", name: "WC Qualifiers OFC" },
+    { code: "uefa.euro", key: "INTL", name: "UEFA Euro" },
+    { code: "uefa.euroq", key: "INTL", name: "UEFA Euro Qualifiers" },
+    { code: "conmebol.america", key: "INTL", name: "Copa America" },
+    { code: "concacaf.gold", key: "INTL", name: "Concacaf Gold Cup" },
+    { code: "caf.nations", key: "INTL", name: "Africa Cup of Nations" },
+    { code: "caf.nations_qual", key: "INTL", name: "AFCON Qualifiers" },
+    { code: "afc.asian.cup", key: "INTL", name: "AFC Asian Cup" },
+    { code: "afc.cupq", key: "INTL", name: "AFC Asian Cup Qualifiers" },
+    { code: "fifa.friendly", key: "INTL", name: "International Friendly" },
+    // Major men's club competitions
     { code: "uefa.champions", key: "UCL", name: "Champions League" },
     { code: "uefa.europa", key: "UEL", name: "Europa League" },
+    { code: "uefa.europa.conf", key: "UECL", name: "Conference League" },
     { code: "eng.1", key: "EPL", name: "Premier League" },
     { code: "esp.1", key: "LALIGA", name: "La Liga" },
     { code: "ita.1", key: "SERIEA", name: "Serie A" },
     { code: "ger.1", key: "BUNDESLIGA", name: "Bundesliga" },
-    { code: "fifa.worldq.uefa", key: "WCQ", name: "WC Qualifiers UEFA" },
-    { code: "fifa.worldq.conmebol", key: "WCQ", name: "WC Qualifiers CONMEBOL" },
-    { code: "fifa.friendly", key: "INTL", name: "International Friendly" }
+    { code: "fra.1", key: "LIGUE1", name: "Ligue 1" },
+    { code: "usa.1", key: "MLS", name: "MLS" },
+    { code: "ind.1", key: "ISL", name: "Indian Super League" }
   ];
+
+  const ALLOWED_SOCCER_LEAGUE_CODES = new Set(SOCCER_LEAGUES.map((lg) => lg.code));
+
+  const SOCCER_DATE_SLOTTED_TARGETS = [
+    { code: "uefa.nations", key: "UNL", name: "UEFA Nations League", includeTomorrow: true },
+    { code: "concacaf.nations.league", key: "INTL", name: "Concacaf Nations League", includeTomorrow: true },
+    { code: "fifa.friendly", key: "INTL", name: "International Friendly", includeTomorrow: true },
+    { code: "caf.nations_qual", key: "INTL", name: "AFCON Qualifiers", includeTomorrow: true },
+    { code: "fifa.worldq.uefa", key: "WCQ", name: "WC Qualifiers UEFA", includeTomorrow: true },
+    { code: "fifa.worldq.conmebol", key: "WCQ", name: "WC Qualifiers CONMEBOL", includeTomorrow: true },
+    { code: "fifa.worldq.concacaf", key: "WCQ", name: "WC Qualifiers Concacaf", includeTomorrow: true },
+    { code: "eng.1", key: "EPL", name: "Premier League", includeTomorrow: false },
+    { code: "esp.1", key: "LALIGA", name: "La Liga", includeTomorrow: false },
+    { code: "ita.1", key: "SERIEA", name: "Serie A", includeTomorrow: false },
+    { code: "ger.1", key: "BUNDESLIGA", name: "Bundesliga", includeTomorrow: false },
+    { code: "uefa.champions", key: "UCL", name: "Champions League", includeTomorrow: false },
+    { code: "usa.1", key: "MLS", name: "MLS", includeTomorrow: false },
+    { code: "ind.1", key: "ISL", name: "Indian Super League", includeTomorrow: false }
+  ];
+
+  const DISALLOWED_FB_WOMEN_RE =
+    /\b(?:women(?:'?s)?|woman|femenin[oa]s?|feminin[eo]?|frauen|femminile|nwsl|wsl|liga\s*f|w-?league)\b|\((?:w|f)\)/i;
+  const DISALLOWED_FB_YOUTH_COLLEGE_RE =
+    /\b(?:u-?\s*(?:1[0-9]|2[0-3])|under-?\s*(?:1[0-9]|2[0-3])|youth|academy|junior\s+(?:world|cup|league|championship|friendly)|reserves?|next\s*pro|premier\s*league\s*2|pl2|olympic(?:s)?|ncaa|college|university|naia|njcaa|varsity|amateur|intramural|club\s+friendl(?:y|ies)|non-?league|b\s+team|second\s+team)\b/i;
+  const DISALLOWED_FB_TEAM_SUFFIX_RE =
+    /(?:\s+(?:ii|b|u\d{2}|u-\d{2}|xi|w)|\s*\((?:u\d{2}|r|res|b|y|w|f)\))$/i;
 
   const TEAM_COLORS = {
     ARS: ["#b91c1c", "#f8fafc"],
@@ -207,46 +253,110 @@
   }
 
   function inferSoccerLeague(ev, payload, defaultMeta) {
-    if (defaultMeta.code !== "all") return defaultMeta;
+    if (defaultMeta && defaultMeta.code && defaultMeta.code !== "all") return defaultMeta;
     const rawLeague =
       (ev.league && (ev.league.name || ev.league.shortName || ev.league.abbreviation)) ||
       (ev.season && ev.season.displayName) ||
       (payload && Array.isArray(payload.leagues) && payload.leagues[0] && payload.leagues[0].name) ||
       "";
-    const slug = String((ev.league && ev.league.slug) || (ev.season && ev.season.slug) || "").toLowerCase();
+    const slug = String(
+      (ev.league && ev.league.slug) ||
+        (payload && Array.isArray(payload.leagues) && payload.leagues[0] && payload.leagues[0].slug) ||
+        (ev.season && ev.season.slug) ||
+        ""
+    ).toLowerCase();
     const linkHref = String((ev.links && ev.links[0] && ev.links[0].href) || "").toLowerCase();
     const combined = `${rawLeague} ${slug} ${linkHref}`.toLowerCase();
 
+    const exact = SOCCER_LEAGUES.find((lg) => slug === lg.code);
+    if (exact) return exact;
     if (combined.includes("nations") && combined.includes("uefa")) {
-      return { code: "uefa.nations", key: "UNL", name: rawLeague || "UEFA Nations League" };
+      return { code: "uefa.nations", key: "UNL", name: "UEFA Nations League" };
     }
-    if (combined.includes("champions")) {
-      return { code: "uefa.champions", key: "UCL", name: rawLeague || "Champions League" };
+    if (combined.includes("concacaf") && combined.includes("nations")) {
+      return { code: "concacaf.nations.league", key: "INTL", name: "Concacaf Nations League" };
     }
-    if (combined.includes("europa")) {
-      return { code: "uefa.europa", key: "UEL", name: rawLeague || "Europa League" };
+    if (combined.includes("champions") && combined.includes("uefa")) {
+      return { code: "uefa.champions", key: "UCL", name: "Champions League" };
     }
-    if (combined.includes("friendly") || combined.includes("world") || combined.includes("concacaf") || combined.includes("nations")) {
-      return { code: "all", key: "INTL", name: rawLeague || "International" };
+    if (combined.includes("conference league") || combined.includes("uefa.europa.conf")) {
+      return { code: "uefa.europa.conf", key: "UECL", name: "Conference League" };
+    }
+    if (combined.includes("europa") && combined.includes("uefa")) {
+      return { code: "uefa.europa", key: "UEL", name: "Europa League" };
+    }
+    if (combined.includes("indian super league") || combined.includes("ind.1")) {
+      return { code: "ind.1", key: "ISL", name: "Indian Super League" };
+    }
+    if (combined.includes("major league soccer") || /\bmls\b/.test(combined) || combined.includes("usa.1")) {
+      return { code: "usa.1", key: "MLS", name: "MLS" };
     }
     if (combined.includes("premier league") || combined.includes("eng.1")) {
-      return { code: "eng.1", key: "EPL", name: rawLeague || "Premier League" };
+      return { code: "eng.1", key: "EPL", name: "Premier League" };
     }
     if (combined.includes("laliga") || combined.includes("la liga") || combined.includes("esp.1")) {
-      return { code: "esp.1", key: "LALIGA", name: rawLeague || "La Liga" };
+      return { code: "esp.1", key: "LALIGA", name: "La Liga" };
     }
     if (combined.includes("serie a") || combined.includes("ita.1")) {
-      return { code: "ita.1", key: "SERIEA", name: rawLeague || "Serie A" };
+      return { code: "ita.1", key: "SERIEA", name: "Serie A" };
     }
     if (combined.includes("bundesliga") || combined.includes("ger.1")) {
-      return { code: "ger.1", key: "BUNDESLIGA", name: rawLeague || "Bundesliga" };
+      return { code: "ger.1", key: "BUNDESLIGA", name: "Bundesliga" };
     }
-    return { code: "all", key: "ALL", name: rawLeague || defaultMeta.name };
+    if (combined.includes("ligue 1") || combined.includes("fra.1")) {
+      return { code: "fra.1", key: "LIGUE1", name: "Ligue 1" };
+    }
+    if (combined.includes("international friendly") || combined.includes("fifa.friendly")) {
+      return { code: "fifa.friendly", key: "INTL", name: "International Friendly" };
+    }
+    return { code: slug || "unknown", key: "ALL", name: rawLeague || (defaultMeta && defaultMeta.name) || "Football" };
+  }
+
+  function isEligibleSeniorMensFootballMatch(ev, payload, resolvedMeta, homeTeam, awayTeam, mappedStatus) {
+    if (!resolvedMeta || !ALLOWED_SOCCER_LEAGUE_CODES.has(resolvedMeta.code)) return false;
+
+    const leagueMeta = ev.league || (payload && Array.isArray(payload.leagues) && payload.leagues[0]) || {};
+    const metaText = [
+      resolvedMeta.name,
+      resolvedMeta.code,
+      ev.name,
+      ev.shortName,
+      ev.description,
+      leagueMeta.name,
+      leagueMeta.shortName,
+      leagueMeta.slug,
+      ev.season && ev.season.slug,
+      ev.season && ev.season.displayName
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const homeNames = [homeTeam.displayName, homeTeam.shortDisplayName, homeTeam.name].filter(Boolean);
+    const awayNames = [awayTeam.displayName, awayTeam.shortDisplayName, awayTeam.name].filter(Boolean);
+    const teamText = [...homeNames, ...awayNames].join(" ");
+    const combinedText = `${metaText} ${teamText}`;
+
+    if (DISALLOWED_FB_WOMEN_RE.test(combinedText) || DISALLOWED_FB_YOUTH_COLLEGE_RE.test(combinedText)) {
+      return false;
+    }
+    if ([...homeNames, ...awayNames].some((nm) => DISALLOWED_FB_TEAM_SUFFIX_RE.test(String(nm).trim()))) {
+      return false;
+    }
+
+    // Drop stale finals from off-season tournament endpoints (>35d old) and far-future fixtures (>45d out)
+    const ts = ev.date ? Date.parse(ev.date) : NaN;
+    if (Number.isFinite(ts)) {
+      const ageMs = Date.now() - ts;
+      if (mappedStatus.status === "FT" && ageMs > 35 * 86400000) return false;
+      if (mappedStatus.status === "PRE" && -ageMs > 45 * 86400000) return false;
+    }
+    return true;
   }
 
   function parseSoccerEvents(payload, leagueMeta) {
     const events = Array.isArray(payload && payload.events) ? payload.events : [];
-    return events.map((ev) => {
+    const out = [];
+    events.forEach((ev) => {
       const resolvedMeta = inferSoccerLeague(ev, payload, leagueMeta);
       const comp = (ev.competitions && ev.competitions[0]) || {};
       const competitors = Array.isArray(comp.competitors) ? comp.competitors : [];
@@ -254,9 +364,14 @@
       const awayObj = competitors.find((c) => c.homeAway === "away") || competitors[1] || {};
       const homeTeam = homeObj.team || {};
       const awayTeam = awayObj.team || {};
+      const mappedStatus = mapStatus(comp.status);
+
+      if (!isEligibleSeniorMensFootballMatch(ev, payload, resolvedMeta, homeTeam, awayTeam, mappedStatus)) {
+        return;
+      }
+
       const homeAbbr = (homeTeam.abbreviation || "HOM").toUpperCase();
       const awayAbbr = (awayTeam.abbreviation || "AWY").toUpperCase();
-      const mappedStatus = mapStatus(comp.status);
 
       const details = Array.isArray(comp.details) ? comp.details : [];
       const parsedEvents = details.map((d) => {
@@ -297,7 +412,7 @@
             ? formatPreviousDateLabel(ev.date, mappedStatus.clock)
             : mappedStatus.clock;
 
-      return {
+      out.push({
         id: `espn-fb-${ev.id}`,
         rawEventId: String(ev.id),
         eventTimestamp: ev.date ? Date.parse(ev.date) || 0 : 0,
@@ -348,15 +463,16 @@
         events: parsedEvents,
         commentary: [],
         lineups: null
-      };
+      });
     });
+    return out;
   }
 
   async function fetchFootballMatchSummary(match) {
     if (!match || !match.rawEventId || !match.leagueCode) return null;
     try {
       const proxyPath = `/api/espn/soccer/${match.leagueCode}/summary?event=${encodeURIComponent(match.rawEventId)}`;
-      const remoteUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${match.leagueCode}/summary?event=${encodeURIComponent(match.rawEventId)}`;
+      const remoteUrl = `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${match.leagueCode}/summary?event=${encodeURIComponent(match.rawEventId)}`;
       const data = await fetchResource(proxyPath, remoteUrl, "json");
 
       const headerComp = data && data.header && data.header.competitions && data.header.competitions[0];
@@ -3016,35 +3132,37 @@
       f1Source: "None"
     };
 
-    // 1. Football: Always fetch current leagues + global slate + today/tomorrow/recent previous days
-    const pastFbDates = getRecentUtcDateStrings(3, true);
-    const pastFbTargets = [
-      ...pastFbDates.map((d) => ({ code: "all", key: "ALL", name: "International / Club", date: d })),
-      { code: "uefa.nations", key: "UNL", name: "UEFA Nations League", date: pastFbDates[0] },
-      { code: "eng.1", key: "EPL", name: "Premier League", date: pastFbDates[0] }
-    ];
+    // 1. Football: Curated senior men's national team & major men's leagues only
+    //    (excludes U17-U23 youth, women's, college NCAA, and amateur/lower leagues)
+    const recentFbDates = getRecentUtcDateStrings(2, true); // [tomorrow, today, yesterday, 2daysAgo]
+    const tomorrowFbDate = recentFbDates[0];
+    const yesterdayFbDate = recentFbDates[2];
+    const datedFbTargets = [];
+    SOCCER_DATE_SLOTTED_TARGETS.forEach((t) => {
+      if (yesterdayFbDate) {
+        datedFbTargets.push({ code: t.code, key: t.key, name: t.name, date: yesterdayFbDate });
+      }
+      if (t.includeTomorrow && tomorrowFbDate) {
+        datedFbTargets.push({ code: t.code, key: t.key, name: t.name, date: tomorrowFbDate });
+      }
+    });
 
-    const [leagueResults, globalRes, pastFbResults] = await Promise.all([
+    const [leagueResults, datedFbResults] = await Promise.all([
       Promise.allSettled(
         SOCCER_LEAGUES.map(async (lg) => {
           const data = await fetchResource(
             `/api/espn/soccer/${lg.code}`,
-            `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg.code}/scoreboard`,
+            `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${lg.code}/scoreboard`,
             "json"
           );
           return parseSoccerEvents(data, lg);
         })
       ),
-      fetchResource(
-        "/api/espn/soccer/all",
-        "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard",
-        "json"
-      ).catch(() => null),
       Promise.allSettled(
-        pastFbTargets.map(async (t) => {
+        datedFbTargets.map(async (t) => {
           const data = await fetchResource(
             `/api/espn/soccer/${t.code}?dates=${t.date}`,
-            `https://site.api.espn.com/apis/site/v2/sports/soccer/${t.code}/scoreboard?dates=${t.date}`,
+            `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${t.code}/scoreboard?dates=${t.date}`,
             "json"
           );
           return parseSoccerEvents(data, t);
@@ -3053,27 +3171,14 @@
     ]);
 
     const footballById = new Map();
-    leagueResults.forEach((res) => {
-      if (res.status === "fulfilled") {
-        res.value.forEach((m) => {
-          if (!footballById.has(m.id)) footballById.set(m.id, m);
-        });
-      }
-    });
-
-    if (globalRes) {
-      const globalMatches = parseSoccerEvents(globalRes, { code: "all", key: "ALL", name: "International / Club" });
-      globalMatches.forEach((gm) => {
-        if (!footballById.has(gm.id)) footballById.set(gm.id, gm);
+    [leagueResults, datedFbResults].forEach((group) => {
+      group.forEach((res) => {
+        if (res.status === "fulfilled") {
+          res.value.forEach((m) => {
+            if (!footballById.has(m.id)) footballById.set(m.id, m);
+          });
+        }
       });
-    }
-
-    pastFbResults.forEach((res) => {
-      if (res.status === "fulfilled") {
-        res.value.forEach((pm) => {
-          if (!footballById.has(pm.id)) footballById.set(pm.id, pm);
-        });
-      }
     });
 
     // Partition active/upcoming vs previous results before slicing so previous games are never truncated
@@ -3089,12 +3194,12 @@
         }
         return 0;
       })
-      .slice(0, 40);
+      .slice(0, 80);
 
     const previousFootball = allFootball
       .filter((m) => m.status === "FT")
       .sort((a, b) => (b.eventTimestamp || 0) - (a.eventTimestamp || 0))
-      .slice(0, 45);
+      .slice(0, 120);
 
     const footballMatches = [...activeFootball, ...previousFootball];
     if (footballMatches.length > 0) {
@@ -3381,7 +3486,7 @@
     const [summaryRes, crSummaryResults, fbNewsRes, crNewsRes, f1NewsRes] = await Promise.all([
       spotlightFb ? fetchFootballMatchSummary(spotlightFb).catch(() => null) : Promise.resolve(null),
       Promise.allSettled(crToEnrich.map((cm) => fetchCricketMatchSummary(cm))),
-      fetchResource("/api/espn/soccer/news", "https://site.api.espn.com/apis/site/v2/sports/soccer/all/news?limit=10", "json").catch(() => null),
+      fetchResource("/api/espn/soccer/news", "https://site.web.api.espn.com/apis/site/v2/sports/soccer/all/news?limit=10", "json").catch(() => null),
       fetchResource("/api/cricket/news", "https://www.espncricinfo.com/rss/content/story/feeds/0.xml", "text").catch(() => null),
       fetchResource("/api/espn/f1/news", "https://site.api.espn.com/apis/site/v2/sports/racing/f1/news?limit=8", "json").catch(() => null)
     ]);
@@ -3623,6 +3728,406 @@
     return null;
   }
 
+  const ACTIVE_IPL_FRANCHISES = [
+    { re: /\bchennai\s+super\s+kings\b|\bcsk\b/i, name: "Chennai Super Kings" },
+    { re: /\bmumbai\s+indians\b/i, name: "Mumbai Indians" },
+    { re: /\broyal\s+challengers\s+(?:bengaluru|bangalore)\b|\brcb\b/i, name: "Royal Challengers Bengaluru" },
+    { re: /\bkolkata\s+knight\s+riders\b|\bkkr\b/i, name: "Kolkata Knight Riders" },
+    { re: /\bsunrisers\s+hyderabad\b|\bsrh\b/i, name: "Sunrisers Hyderabad" },
+    { re: /\brajasthan\s+royals\b/i, name: "Rajasthan Royals" },
+    { re: /\bdelhi\s+capitals\b/i, name: "Delhi Capitals" },
+    { re: /\bpunjab\s+kings\b|\bkings\s+xi\s+punjab\b/i, name: "Punjab Kings" },
+    { re: /\bgujarat\s+titans\b/i, name: "Gujarat Titans" },
+    { re: /\blucknow\s+super\s+giants\b|\blsg\b/i, name: "Lucknow Super Giants" }
+  ];
+
+  function matchActiveIplFranchise(text) {
+    const s = String(text || "").trim();
+    if (!s) return "";
+    for (let i = 0; i < ACTIVE_IPL_FRANCHISES.length; i += 1) {
+      if (ACTIVE_IPL_FRANCHISES[i].re.test(s)) return ACTIVE_IPL_FRANCHISES[i].name;
+    }
+    return "";
+  }
+
+  function resolveCricbuzzBio(decoded, playerData) {
+    const bio = playerData && typeof playerData.bio === "string" ? playerData.bio.trim() : "";
+    if (!bio) return "";
+    if (!bio.startsWith("$")) return bio;
+    const refId = bio.slice(1).replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!refId || !decoded) return "";
+    const marker = `\n${refId}:T`;
+    let idx = decoded.indexOf(marker);
+    if (idx >= 0) idx += 1;
+    else if (decoded.startsWith(`${refId}:T`)) idx = 0;
+    if (idx < 0) return "";
+    const commaIdx = decoded.indexOf(",", idx);
+    if (commaIdx < 0) return "";
+    const endMatch = decoded.slice(commaIdx + 1).search(/\n[0-9a-zA-Z_-]{1,6}:/);
+    const raw = endMatch >= 0 ? decoded.slice(commaIdx + 1, commaIdx + 1 + endMatch) : decoded.slice(commaIdx + 1, commaIdx + 3500);
+    return raw.replace(/<[^>]+>/g, " ").replace(/\\u003c[^\\]+\\u003e/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function parseHtmlDocument(html) {
+    if (!html || typeof DOMParser === "undefined") return null;
+    try {
+      return new DOMParser().parseFromString(String(html), "text/html");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function upsertIccEntry(byNormName, item, fmt, prefix, overwrite) {
+    if (!item || !item.name) return;
+    const norm = normalizePersonName(item.name);
+    if (!norm) return;
+    let entry = byNormName.get(norm);
+    if (!entry) {
+      entry = {
+        cbId: item.id ? String(item.id) : "",
+        cbName: item.name,
+        cbSlug: buildCricbuzzSlug(item.name),
+        country: item.country || "",
+        normTokens: norm.split(" ").filter(Boolean),
+        ranks: {}
+      };
+      byNormName.set(norm, entry);
+    } else if (!entry.cbId && item.id) {
+      entry.cbId = String(item.id);
+    }
+    const key = `${fmt}_${prefix}`;
+    if (overwrite || !entry.ranks[key]) {
+      entry.ranks[key] = {
+        rank: parseInt(item.rank, 10) || item.rank,
+        rating: parseInt(item.rating || item.points, 10) || item.rating || ""
+      };
+    }
+  }
+
+  async function fetchWikiIccRankings(gender, byNormName) {
+    const pageTitle = gender === "women" ? "ICC_Women's_Player_Rankings" : "ICC_Men's_Player_Rankings";
+    const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(pageTitle)}&redirects=1&prop=text&format=json&origin=*`;
+    const payload = await fetchResource("", url, "json", { timeoutMs: 8000 }).catch(() => null);
+    const html = payload && payload.parse && payload.parse.text && payload.parse.text["*"];
+    const doc = parseHtmlDocument(html);
+    if (!doc) return 0;
+
+    let added = 0;
+    const tables = doc.querySelectorAll("table.wikitable");
+    tables.forEach((tbl) => {
+      const rows = tbl.querySelectorAll("tr");
+      if (rows.length < 3) return;
+      const titleText = (rows[0].textContent || "").replace(/\s+/g, " ").trim();
+      if (!/ICC\s+Top/i.test(titleText)) return;
+
+      const fmt = /\bTest\b/i.test(titleText)
+        ? "test"
+        : /\bW?ODI\b/i.test(titleText)
+          ? "odi"
+          : /\bW?T20I?\b/i.test(titleText)
+            ? "t20"
+            : "";
+      const prefix = /bat/i.test(titleText)
+        ? "bat"
+        : /bowl/i.test(titleText)
+          ? "bowl"
+          : /all-?round/i.test(titleText)
+            ? "all"
+            : "";
+      if (!fmt || !prefix) return;
+
+      for (let r = 1; r < rows.length; r += 1) {
+        const cells = rows[r].querySelectorAll("th, td");
+        if (cells.length < 3) continue;
+        const rankNum = parseInt((cells[0].textContent || "").trim(), 10);
+        if (!Number.isFinite(rankNum) || rankNum < 1 || rankNum > 20) continue;
+        const nameCell = cells[1];
+        const links = nameCell.querySelectorAll("a");
+        const playerLink = links.length ? links[links.length - 1] : null;
+        const rawName = (playerLink ? playerLink.textContent : nameCell.textContent || "")
+          .replace(/\[[^\]]*\]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        const ratingNum = parseInt((cells[2].textContent || "").replace(/[^0-9]/g, ""), 10) || "";
+        if (!rawName) continue;
+        const flagImg = nameCell.querySelector("img");
+        const country = flagImg ? (flagImg.getAttribute("alt") || "").trim() : "";
+        upsertIccEntry(byNormName, { name: rawName, rank: rankNum, rating: ratingNum, country }, fmt, prefix);
+        added += 1;
+      }
+    });
+    return added;
+  }
+
+  const wikiCricketCache = new Map();
+
+  function parseWikiInfoboxDetails(html, extractText) {
+    const doc = parseHtmlDocument(html);
+    const out = {
+      infoboxLoaded: false,
+      currentIplTeam: "",
+      nationalClosed: false,
+      played: { test: false, odi: false, t20: false },
+      careerBatting: null,
+      careerBowling: null
+    };
+    const nowYear = new Date().getFullYear();
+
+    if (doc) {
+      const ib = doc.querySelector("table.infobox");
+      if (ib) {
+        const cleanCell = (el) =>
+          (el ? el.textContent : "")
+            .replace(/\u00a0/g, " ")
+            .replace(/\[\s*[a-z0-9]+\s*\]/gi, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const rows = Array.from(ib.querySelectorAll("tr"));
+        if (rows.length > 0) out.infoboxLoaded = true;
+        rows.forEach((tr) => {
+          const cells = tr.querySelectorAll("th, td");
+          if (cells.length < 2) return;
+          const left = cleanCell(cells[0]);
+          const right = cleanCell(cells[1]);
+
+          if (/^National side$/i.test(left)) {
+            const spanMatch = right.match(/\((\d{4})\s*[–-]\s*(present|\d{4})\)/i);
+            if (spanMatch && spanMatch[2].toLowerCase() !== "present") {
+              const endYr = parseInt(spanMatch[2], 10);
+              if (Number.isFinite(endYr) && endYr < nowYear) {
+                out.nationalClosed = true;
+              }
+            }
+          }
+
+          if (/^(Test debut|Only Test|Last Test)\b/i.test(left)) out.played.test = true;
+          if (/^(ODI debut|Only ODI|Last ODI)\b/i.test(left)) out.played.odi = true;
+          if (/^(T20I debut|Only T20I|Last T20I)\b/i.test(left)) out.played.t20 = true;
+
+          const iplMatch = matchActiveIplFranchise(right);
+          if (iplMatch) {
+            const hasPresent = /\bpresent\b/i.test(left);
+            const hasCurrYr = new RegExp(`\\b(?:${nowYear}|${nowYear - 1})\\b`).test(left);
+            const endedPrev = new RegExp(`[–-]\\s*${nowYear - 1}\\b`).test(left) && !hasPresent;
+            if (hasPresent || (hasCurrYr && !endedPrev)) {
+              out.currentIplTeam = iplMatch;
+            }
+          }
+        });
+
+        // Parse Career statistics subtable inside Infobox
+        const compIdx = rows.findIndex((tr) => {
+          const c0 = tr.querySelector("th, td");
+          return c0 && /^Competition$/i.test(cleanCell(c0));
+        });
+        if (compIdx >= 0) {
+          const hdrCells = Array.from(rows[compIdx].querySelectorAll("th, td"));
+          const rawFormats = hdrCells.slice(1).map((c) => cleanCell(c)).filter(Boolean);
+          const formats = rawFormats.map((f) => (/^LA$/i.test(f) ? "List A" : /^WT20I$/i.test(f) ? "T20I" : /^WODI$/i.test(f) ? "ODI" : f));
+          const colCount = formats.length;
+
+          const batMap = {
+            Matches: "Matches",
+            "Runs scored": "Runs",
+            "Batting average": "Average",
+            "100s/50s": "100s/50s",
+            "Top score": "Highest"
+          };
+          const bowlMap = {
+            Matches: "Matches",
+            "Balls bowled": "Balls",
+            Wickets: "Wickets",
+            "Bowling average": "Avg",
+            "5 wickets in innings": "5w",
+            "Best bowling": "BBI"
+          };
+          const batRows = [];
+          const bowlRows = [];
+          let hasPositiveWickets = false;
+
+          for (let r = compIdx + 1; r < rows.length; r += 1) {
+            const cells = Array.from(rows[r].querySelectorAll("th, td"));
+            if (cells.length < colCount + 1) continue;
+            const lbl = cleanCell(cells[0]);
+            const cols = cells.slice(1, 1 + colCount).map((c) => cleanCell(c) || "-");
+
+            if (lbl === "Matches") {
+              formats.forEach((f, fIdx) => {
+                const n = parseInt(String(cols[fIdx] || "").replace(/[^0-9]/g, ""), 10);
+                if (Number.isFinite(n) && n > 0) {
+                  if (/^Test$/i.test(f)) out.played.test = true;
+                  if (/^ODI$/i.test(f)) out.played.odi = true;
+                  if (/^T20I$/i.test(f)) out.played.t20 = true;
+                }
+              });
+            }
+
+            if (batMap[lbl]) batRows.push({ label: batMap[lbl], cols });
+            if (bowlMap[lbl]) {
+              if (lbl === "Wickets" && cols.some((v) => (parseInt(String(v).replace(/[^0-9]/g, ""), 10) || 0) > 0)) {
+                hasPositiveWickets = true;
+              }
+              bowlRows.push({ label: bowlMap[lbl], cols });
+            }
+          }
+
+          if (formats.length && batRows.length > 1) {
+            out.careerBatting = { formats, rows: batRows };
+          }
+          if (formats.length && hasPositiveWickets && bowlRows.length > 1) {
+            out.careerBowling = { formats, rows: bowlRows };
+          }
+        }
+      }
+    }
+
+    if (!out.currentIplTeam && extractText) {
+      const lead = String(extractText).slice(0, 1200);
+      const presentIplSentence = lead.match(/[^.\n]*\b(?:plays?\s+for|represents?)\b[^.\n]*\bIndian Premier League\b[^.\n]*/i);
+      if (presentIplSentence) {
+        const team = matchActiveIplFranchise(presentIplSentence[0]);
+        if (team) out.currentIplTeam = team;
+      }
+    }
+
+    return out;
+  }
+
+  function detectCricketFormatRetirements(texts, playerName, played) {
+    const out = { all: false, test: false, odi: false, t20: false };
+    const combined = texts.filter(Boolean).join("\n");
+    if (!combined) return out;
+
+    const normTokens = normalizePersonName(playerName).split(" ").filter((t) => t.length >= 2);
+    const lastToken = normTokens.length ? normTokens[normTokens.length - 1] : "";
+    const sentences = combined.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+
+    for (let i = 0; i < sentences.length; i += 1) {
+      const s = sentences[i].trim();
+      if (!s || s.length > 420) continue;
+      if (/\b(?:retired\s+(?:hurt|out|not out)|police|father|football)\b/i.test(s)) continue;
+
+      if (i < 5 && /\bformer\s+(?:[a-z]+\s+){0,2}international\s+cricketer\b/i.test(s)) {
+        out.all = true;
+        continue;
+      }
+
+      if (!/\bretir(?:e|ed|es|ing|ement)\b|\bstep(?:ped)?\s+(?:down|away)\b|\bannounced\s+that\b[^.]{0,40}\bwould\s+be\s+(?:his|her)\s+last\b/i.test(s)) {
+        continue;
+      }
+
+      // Skip attribution to a different player (e.g., "following MS Dhoni's retirement", "upon the retirement of Agarkar")
+      const possMatch = s.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'s\s+retire/i);
+      if (possMatch && lastToken && !possMatch[1].toLowerCase().includes(lastToken)) continue;
+      if (/\b(?:upon|following|after)\s+the\s+retirement\s+of\b/i.test(s)) continue;
+
+      const hasSelfRef =
+        /\b(?:he|she|his|her|himself|herself)\b/i.test(s) ||
+        (lastToken && s.toLowerCase().includes(lastToken));
+      if (!hasSelfRef && !/^announced\b/i.test(s)) continue;
+
+      if (/\bretir(?:e|ed|es|ing|ement)\b[^.\n;]{0,65}\b(?:all\s+forms\s+of\s+)?international\s+cricket\b|\bretired\s+from\s+all\s+formats\b/i.test(s)) {
+        out.all = true;
+      }
+      if (/\b(?:retire(?:d|s|ment)?|step(?:ped)?\s+(?:down|away))\b[^.\n;]{0,65}\b(?:the\s+)?Tests?(?:\s+cricket|\s*match(?:es)?)?\b|\bTest\s+(?:cricket\s+)?retirement\b|\bwould\s+be\s+(?:his|her)\s+last[^.\n;]{0,30}\bTest/i.test(s)) {
+        out.test = true;
+      }
+      if (/\b(?:retire(?:d|s|ment)?|step(?:ped)?\s+(?:down|away))\b[^.\n;]{0,65}\b(?:the\s+)?(?:ODIs?|One[-\s]Day\s+Internationals?)\b|\bODI\s+retirement\b/i.test(s)) {
+        out.odi = true;
+      }
+      if (/\b(?:retire(?:d|s|ment)?|step(?:ped)?\s+(?:down|away))\b[^.\n;]{0,65}\b(?:the\s+)?(?:T20Is?|T20\s+Internationals?)\b|\bT20I?\s+retirement\b/i.test(s)) {
+        out.t20 = true;
+      }
+    }
+
+    if (out.all) {
+      if (played.test) out.test = true;
+      if (played.odi) out.odi = true;
+      if (played.t20) out.t20 = true;
+    }
+    return out;
+  }
+
+  async function fetchWikipediaCricketDetails(primaryName, fallbackName) {
+    const cleanName = String(primaryName || fallbackName || "").replace(/\s+/g, " ").trim();
+    if (!cleanName) return {};
+    const cacheKey = cleanName.toLowerCase();
+    const cached = wikiCricketCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < PROFILE_CACHE_TTL_MS) return cached.data;
+
+    const cricketRe = /\b(cricket|cricketer|batsman|batter|bowler|all-rounder|wicket-?keeper|ipl|test cricket)\b/i;
+
+    const queryTitleWithParse = async (titleStr, requireMatch) => {
+      const qUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titleStr)}&redirects=1&prop=extracts|pageimages&explaintext=1&pithumbsize=500&format=json&origin=*`;
+      const pUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(titleStr)}&redirects=1&prop=text&section=0&disabletoc=1&format=json&origin=*`;
+      const [data, parseResInitial] = await Promise.all([
+        fetchResource("", qUrl, "json", { timeoutMs: 11000 }).catch(() => null),
+        fetchResource("", pUrl, "json", { timeoutMs: 11000 }).catch(() => null)
+      ]);
+      const pages = data && data.query && data.query.pages ? Object.values(data.query.pages) : [];
+      const page = pages[0];
+      if (!page || page.missing !== undefined || !page.title) return null;
+      const extract = String(page.extract || "");
+      if (/\bmay refer to:\b/i.test(extract.slice(0, 260))) return null;
+      if (requireMatch && !cricketRe.test(extract.slice(0, 1200))) return null;
+
+      let parseRes = parseResInitial;
+      let sec0Html = (parseRes && parseRes.parse && parseRes.parse.text && parseRes.parse.text["*"]) || "";
+      if (!sec0Html && page.title) {
+        const retryUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(page.title)}&redirects=1&prop=text&section=0&disabletoc=1&format=json&origin=*`;
+        parseRes = await fetchResource("", retryUrl, "json", { timeoutMs: 11000 }).catch(() => null);
+        sec0Html = (parseRes && parseRes.parse && parseRes.parse.text && parseRes.parse.text["*"]) || "";
+      }
+
+      return {
+        title: page.title,
+        photo: (page.thumbnail && page.thumbnail.source) || "",
+        extract,
+        sec0Html
+      };
+    };
+
+    let pageData = await queryTitleWithParse(cleanName, true);
+    if (!pageData && fallbackName && normalizePersonName(fallbackName) !== normalizePersonName(cleanName)) {
+      pageData = await queryTitleWithParse(fallbackName, true);
+    }
+    if (!pageData) {
+      const searchQ = `${cleanName} cricketer`;
+      const srch = await fetchResource(
+        `/api/wiki/search?q=${encodeURIComponent(searchQ)}`,
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQ)}&format=json&srlimit=3&origin=*`,
+        "json",
+        { timeoutMs: 8000 }
+      ).catch(() => null);
+      const hits = srch && srch.query && Array.isArray(srch.query.search) ? srch.query.search : [];
+      const hitTitle = (hits.find((h) => cricketRe.test(h.snippet || h.title || "")) || hits[0] || {}).title || "";
+      if (hitTitle) pageData = await queryTitleWithParse(hitTitle, false);
+    }
+
+    let finalObj = {};
+    if (pageData && pageData.title) {
+      const parsedIb = parseWikiInfoboxDetails(pageData.sec0Html, pageData.extract);
+      finalObj = {
+        loaded: true,
+        infoboxLoaded: parsedIb.infoboxLoaded,
+        wikiTitle: pageData.title,
+        photo: pageData.photo || "",
+        extract: pageData.extract || "",
+        currentIplTeam: parsedIb.currentIplTeam || "",
+        nationalClosed: parsedIb.nationalClosed,
+        played: parsedIb.played,
+        careerBatting: parsedIb.careerBatting,
+        careerBowling: parsedIb.careerBowling
+      };
+    }
+
+    if (finalObj.infoboxLoaded) {
+      wikiCricketCache.set(cacheKey, { ts: Date.now(), data: finalObj });
+    }
+    return finalObj;
+  }
+
   async function fetchWikipediaProfile(name, sportHint) {
     const cleanName = String(name || "").replace(/\s+/g, " ").trim();
     if (!cleanName) return {};
@@ -3680,7 +4185,7 @@
     const gKey = gender === "women" ? "women" : "men";
     const cached = iccRankingsCache[gKey];
     if (cached && Date.now() - cached.ts < PROFILE_CACHE_TTL_MS * 2) {
-      return cached.map;
+      return cached;
     }
 
     const categories = [
@@ -3689,21 +4194,29 @@
       { cat: "all-rounder", prefix: "all" }
     ];
 
-    const responses = await Promise.allSettled(
-      categories.map((c) =>
-        fetchResource(
-          `/api/cricket/icc-rankings?cat=${c.cat}&gender=${gKey}`,
-          "",
-          "text",
-          { timeoutMs: 7000 }
+    const cbPromise = proxyAvailable === true
+      ? Promise.allSettled(
+          categories.map((c) =>
+            fetchResource(
+              `/api/cricket/icc-rankings?cat=${c.cat}&gender=${gKey}`,
+              "",
+              "text",
+              { timeoutMs: 7000 }
+            )
+          )
         )
-      )
-    );
+      : Promise.resolve([]);
 
     const byNormName = new Map();
     const formats = ["test", "odi", "t20"];
 
-    responses.forEach((res, cIdx) => {
+    const [cbResponses, wikiAdded] = await Promise.all([
+      cbPromise,
+      fetchWikiIccRankings(gKey, byNormName).catch(() => 0)
+    ]);
+
+    let cbAdded = 0;
+    cbResponses.forEach((res, cIdx) => {
       if (res.status !== "fulfilled" || !res.value) return;
       const prefix = categories[cIdx].prefix;
       const decoded = decodeNextFlightText(res.value);
@@ -3714,32 +4227,16 @@
         const list = fmtData[fmt] && Array.isArray(fmtData[fmt].rank) ? fmtData[fmt].rank : [];
         list.forEach((item) => {
           if (!item || !item.name) return;
-          const norm = normalizePersonName(item.name);
-          if (!norm) return;
-          let entry = byNormName.get(norm);
-          if (!entry) {
-            entry = {
-              cbId: item.id ? String(item.id) : "",
-              cbName: item.name,
-              cbSlug: buildCricbuzzSlug(item.name),
-              country: item.country || "",
-              normTokens: norm.split(" ").filter(Boolean),
-              ranks: {}
-            };
-            byNormName.set(norm, entry);
-          } else if (!entry.cbId && item.id) {
-            entry.cbId = String(item.id);
-          }
-          entry.ranks[`${fmt}_${prefix}`] = {
-            rank: parseInt(item.rank, 10) || item.rank,
-            rating: parseInt(item.rating || item.points, 10) || item.rating || ""
-          };
+          upsertIccEntry(byNormName, item, fmt, prefix, true);
+          cbAdded += 1;
         });
       });
     });
 
-    iccRankingsCache[gKey] = { ts: Date.now(), map: byNormName };
-    return byNormName;
+    const scope = cbAdded > 0 ? "top100" : wikiAdded > 0 ? "top10" : "none";
+    const result = { ts: Date.now(), map: byNormName, scope };
+    iccRankingsCache[gKey] = result;
+    return result;
   }
 
   function findIccRankingEntry(iccMap, playerName, teamHint) {
@@ -3866,6 +4363,16 @@
     };
   }
 
+  function checkCareerTableFormatPlayed(table, colPattern) {
+    if (!table || !Array.isArray(table.formats) || !Array.isArray(table.rows)) return false;
+    const colIdx = table.formats.findIndex((f) => colPattern.test(String(f || "")));
+    if (colIdx < 0) return false;
+    const matchesRow = table.rows.find((r) => /^matches$/i.test(String((r && r.label) || "")));
+    if (!matchesRow || !Array.isArray(matchesRow.cols)) return true;
+    const n = parseInt(String(matchesRow.cols[colIdx] || "").replace(/[^0-9]/g, ""), 10);
+    return Number.isFinite(n) && n > 0;
+  }
+
   async function fetchCricketPlayerProfile(hint) {
     const id = hint && hint.id ? String(hint.id) : "";
     const name = (hint && hint.name) || "Cricketer";
@@ -3873,7 +4380,7 @@
     const isWomen = /women/i.test(`${teamHint} ${(hint && hint.series) || ""}`);
     const gender = isWomen ? "women" : "men";
 
-    const [athRes, iccMap] = await Promise.all([
+    const [athRes, iccResult] = await Promise.all([
       id
         ? fetchResource(
             `/api/cricket/athlete?id=${encodeURIComponent(id)}`,
@@ -3882,9 +4389,11 @@
             { timeoutMs: 6500 }
           ).catch(() => null)
         : Promise.resolve(null),
-      fetchIccRankingsMap(gender).catch(() => new Map())
+      fetchIccRankingsMap(gender).catch(() => ({ map: new Map(), scope: "none" }))
     ]);
 
+    const iccMap = (iccResult && iccResult.map) || new Map();
+    const iccScope = (iccResult && iccResult.scope) || "none";
     const a = (athRes && athRes.athlete) || {};
     const displayName = a.displayName || name;
     const explicitHeadshot = (a.headshot && a.headshot.href) || "";
@@ -3892,8 +4401,8 @@
     const espnPhoto = explicitHeadshot || cdnHeadshotFallback;
     const cbEntry = findIccRankingEntry(iccMap, displayName, teamHint) || findIccRankingEntry(iccMap, name, teamHint);
 
-    const [cbHtmlRes, wikiRes] = await Promise.all([
-      cbEntry && cbEntry.cbId
+    const [cbHtmlRes, wikiDetails] = await Promise.all([
+      cbEntry && cbEntry.cbId && proxyAvailable === true
         ? fetchResource(
             `/api/cricket/cb-profile?id=${encodeURIComponent(cbEntry.cbId)}&slug=${encodeURIComponent(cbEntry.cbSlug)}`,
             "",
@@ -3901,23 +4410,29 @@
             { timeoutMs: 7000 }
           ).catch(() => null)
         : Promise.resolve(null),
-      !explicitHeadshot ? fetchWikipediaProfile(displayName, "cricketer") : Promise.resolve({})
+      fetchWikipediaCricketDetails(displayName, name).catch(() => ({}))
     ]);
 
     let playerData = null;
     let battingTable = null;
     let bowlingTable = null;
+    let cbBioText = "";
     if (cbHtmlRes) {
       const decoded = decodeNextFlightText(cbHtmlRes);
       playerData = extractBalancedJsonAfter(decoded, '"playerData":');
       battingTable = formatCricbuzzCareerTable(extractBalancedJsonAfter(decoded, '"battingStats":'));
       bowlingTable = formatCricbuzzCareerTable(extractBalancedJsonAfter(decoded, '"bowlingStats":'));
+      cbBioText = resolveCricbuzzBio(decoded, playerData);
     }
 
     let ageVal = a.age || computeAgeFromDob(a.dateOfBirth);
     if (!ageVal && playerData && playerData.DoB) {
       const mAge = String(playerData.DoB).match(/\((\d+)\s+years/i);
       if (mAge) ageVal = parseInt(mAge[1], 10);
+    }
+    if (!ageVal && wikiDetails && wikiDetails.extract) {
+      const mBorn = wikiDetails.extract.match(/\bborn\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+      if (mBorn) ageVal = computeAgeFromDob(mBorn[1]);
     }
 
     const rMap = (cbEntry && cbEntry.ranks) || {};
@@ -3947,13 +4462,84 @@
       }
     };
 
+    const hintFmtRaw = String((hint && hint.format) || "");
+    const hintIsFmt = (fmt) => {
+      if (fmt === "test") return /\btest\b/i.test(hintFmtRaw);
+      if (fmt === "odi") return /\bw?odi\b/i.test(hintFmtRaw);
+      if (fmt === "t20") return /\bw?t20i\b/i.test(hintFmtRaw) && !/\bipl\b/i.test(hintFmtRaw);
+      return false;
+    };
+
+    const wikiPlayed = (wikiDetails && wikiDetails.played) || {};
+    const cbPlayed = {
+      test: checkCareerTableFormatPlayed(battingTable, /^Test$/i) || checkCareerTableFormatPlayed(bowlingTable, /^Test$/i),
+      odi: checkCareerTableFormatPlayed(battingTable, /^ODI$/i) || checkCareerTableFormatPlayed(bowlingTable, /^ODI$/i),
+      t20: checkCareerTableFormatPlayed(battingTable, /^T20I?$/i) || checkCareerTableFormatPlayed(bowlingTable, /^T20I?$/i)
+    };
+
+    const hasFmtRank = (fmt) =>
+      ["batting", "bowling", "allRounder"].some(
+        (cat) => iccRankings[cat][fmt] && iccRankings[cat][fmt].rank
+      );
+    const hasFmtBest = (fmt) =>
+      ["batting", "bowling", "allRounder"].some(
+        (cat) => iccRankings[cat][fmt] && iccRankings[cat][fmt].best
+      );
+
+    const played = {
+      test: Boolean(hintIsFmt("test") || wikiPlayed.test || cbPlayed.test || hasFmtRank("test") || hasFmtBest("test")),
+      odi: Boolean(hintIsFmt("odi") || wikiPlayed.odi || cbPlayed.odi || hasFmtRank("odi") || hasFmtBest("odi")),
+      t20: Boolean(hintIsFmt("t20") || wikiPlayed.t20 || cbPlayed.t20 || hasFmtRank("t20") || hasFmtBest("t20"))
+    };
+
+    const retired = detectCricketFormatRetirements(
+      [wikiDetails && wikiDetails.extract, cbBioText],
+      (playerData && playerData.name) || displayName,
+      played
+    );
+
+    const hasMetaSource = Boolean((wikiDetails && wikiDetails.infoboxLoaded) || cbHtmlRes);
+    const nationalClosed = Boolean(wikiDetails && wikiDetails.nationalClosed);
+    const formatStatus = {};
+
+    ["test", "odi", "t20"].forEach((fmt) => {
+      const rankList = ["batting", "bowling", "allRounder"]
+        .map((cat) => iccRankings[cat][fmt] && parseInt(iccRankings[cat][fmt].rank, 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const bestCurrent = rankList.length ? Math.min(...rankList) : null;
+      const isNow = hintIsFmt(fmt);
+      const isRet = !isNow && played[fmt] && (retired[fmt] || retired.all || nationalClosed);
+
+      if (isRet) {
+        formatStatus[fmt] = { state: "retired", label: "Retired" };
+      } else if (!played[fmt] && hasMetaSource) {
+        formatStatus[fmt] = { state: "not_playing", label: "Not Playing" };
+      } else if (bestCurrent) {
+        formatStatus[fmt] = { state: "ranked", label: `Ranked #${bestCurrent}`, topRank: bestCurrent };
+      } else if (!played[fmt]) {
+        formatStatus[fmt] = { state: "unknown", label: "No data" };
+      } else {
+        formatStatus[fmt] = {
+          state: "unranked",
+          label: iccScope === "top10" ? "Outside Top 10" : "Unranked"
+        };
+      }
+    });
+
+    const iplFromHint =
+      /ipl|indian premier league/i.test(`${hintFmtRaw} ${(hint && hint.series) || ""}`)
+        ? matchActiveIplFranchise(teamHint)
+        : "";
+    const iplTeam = iplFromHint || (wikiDetails && wikiDetails.currentIplTeam) || "";
+
     return {
       sport: "cricket",
       name: (playerData && playerData.name) || displayName,
       fullName: (playerData && playerData.fullName) || displayName,
-      photo: espnPhoto || (wikiRes && wikiRes.photo) || "",
-      fallbackPhoto: (wikiRes && wikiRes.photo) || "",
+      photo: espnPhoto || (wikiDetails && wikiDetails.photo) || "",
+      fallbackPhoto: (wikiDetails && wikiDetails.photo) || "",
       team: (playerData && playerData.intlTeam) || (a.team && a.team.displayName) || teamHint || (cbEntry && cbEntry.country) || "-",
+      iplTeam,
       flagUrl: (a.flag && a.flag.href) || "",
       age: ageVal || "-",
       dob: (playerData && playerData.DoBFormat) || "",
@@ -3962,8 +4548,10 @@
       batStyle: (a.batStyle && a.batStyle.description) || (playerData && playerData.bat) || "-",
       bowlStyle: (a.bowlStyle && a.bowlStyle.description) || (playerData && playerData.bowl) || "-",
       iccRankings,
-      careerBatting: battingTable,
-      careerBowling: bowlingTable,
+      formatStatus,
+      rankingsScope: iccScope,
+      careerBatting: battingTable || (wikiDetails && wikiDetails.careerBatting) || null,
+      careerBowling: bowlingTable || (wikiDetails && wikiDetails.careerBowling) || null,
       matchStats: (hint && hint.matchStats) || null
     };
   }

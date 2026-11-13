@@ -17,6 +17,8 @@
     { key: "LALIGA", label: "La Liga" },
     { key: "SERIEA", label: "Serie A" },
     { key: "BUNDESLIGA", label: "Bundesliga" },
+    { key: "MLS", label: "MLS" },
+    { key: "ISL", label: "ISL" },
     { key: "INTL", label: "International" }
   ];
 
@@ -130,40 +132,43 @@
     const { escapeHtml, renderCrest, renderStatusBadge } = Apex.utils;
     const flashClass = match._flashUntil && match._flashUntil > Date.now() ? "is-flashing" : "";
     const featuredClass = isFeatured ? "is-featured" : "";
+    const homeScoreTxt = match.status === "PRE" ? "–" : escapeHtml(match.home.score);
+    const awayScoreTxt = match.status === "PRE" ? "–" : escapeHtml(match.away.score);
 
     return `
       <article class="match-row-card ${featuredClass} ${flashClass}" data-open-modal="football" data-id="${escapeHtml(match.id)}">
-        <div class="match-row-meta">
-          <span>${escapeHtml(match.leagueName)} • ${escapeHtml(match.venue.split(",")[0])}</span>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <button type="button" class="filter-pill" style="padding:1px 7px;font-size:10px;" data-pin-football="${escapeHtml(match.id)}" title="Pin to top spotlight">
+        <div class="fb-mini-top">
+          <span class="fb-mini-meta-txt" title="${escapeHtml(match.leagueName)} • ${escapeHtml(match.venue)}">${escapeHtml(match.leagueName)} • ${escapeHtml(match.venue.split(",")[0])}</span>
+          <div class="fb-mini-top-actions">
+            <button type="button" class="fb-mini-pin-btn ${isFeatured ? "is-active" : ""}" data-pin-football="${escapeHtml(match.id)}" title="Pin to top spotlight">
               ${isFeatured ? "Pinned" : "Pin"}
             </button>
             ${renderStatusBadge(match.status, match.clock)}
           </div>
         </div>
 
-        <div class="match-row-teams">
-          <div class="match-side">
-            ${renderCrest(match.home, false)}
-            <span class="match-side-name">${escapeHtml(match.home.name)}</span>
-            ${renderCardPips(match.home)}
+        <div class="fb-mini-teams">
+          <div class="fb-mini-team-row">
+            <div class="fb-mini-team-side">
+              ${renderCrest(match.home, false)}
+              <span class="fb-mini-team-name">${escapeHtml(match.home.name)}</span>
+              ${renderCardPips(match.home)}
+            </div>
+            <span class="fb-mini-score tabular">${homeScoreTxt}</span>
           </div>
-
-          <div class="match-score-pill tabular">
-            ${match.status === "PRE" ? "vs" : `${escapeHtml(match.home.score)} - ${escapeHtml(match.away.score)}`}
-          </div>
-
-          <div class="match-side is-away">
-            ${renderCrest(match.away, false)}
-            <span class="match-side-name">${escapeHtml(match.away.name)}</span>
-            ${renderCardPips(match.away)}
+          <div class="fb-mini-team-row">
+            <div class="fb-mini-team-side">
+              ${renderCrest(match.away, false)}
+              <span class="fb-mini-team-name">${escapeHtml(match.away.name)}</span>
+              ${renderCardPips(match.away)}
+            </div>
+            <span class="fb-mini-score tabular">${awayScoreTxt}</span>
           </div>
         </div>
 
-        <div class="match-latest-note">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(match.latestEvent)}</span>
-          <span style="color:var(--sport-football);font-weight:600;flex-shrink:0;">Details →</span>
+        <div class="fb-mini-foot">
+          <span class="fb-mini-note">${escapeHtml(match.latestEvent)}</span>
+          <span class="fb-mini-details">Details →</span>
         </div>
       </article>
     `;
@@ -200,10 +205,10 @@
       if (ui.footballLeagueFilter === "LIVE") return m.status === "LIVE" || m.status === "HT";
       if (ui.footballLeagueFilter === "INTL") {
         return ["UNL", "WCQ", "INTL", "WORLD"].includes(m.league) ||
-          /nations|world|friendly|international|concacaf|copa|euro/i.test(m.leagueName || "");
+          /nations|world|friendly|international|concacaf|copa|euro|afcon|asian cup|gold cup/i.test(m.leagueName || "");
       }
       if (ui.footballLeagueFilter === "UNL") {
-        return m.league === "UNL" || /nations league/i.test(m.leagueName || "");
+        return m.league === "UNL" || /uefa nations league/i.test(m.leagueName || "");
       }
       return m.league === ui.footballLeagueFilter;
     });
@@ -222,7 +227,7 @@
     const liveInFilterCount = liveUpcomingMatches.filter((m) => m.status === "LIVE" || m.status === "HT").length;
 
     const liveListHtml = liveUpcomingMatches.length
-      ? liveUpcomingMatches.map((m) => renderMatchRow(m, featured && m.id === featured.id)).join("")
+      ? liveUpcomingMatches.slice(0, 40).map((m) => renderMatchRow(m, featured && m.id === featured.id)).join("")
       : `<div class="empty-state is-compact">No live or upcoming matches in this league filter.</div>`;
 
     const prevEmptyText =
@@ -230,7 +235,7 @@
         ? "Switch from Live Only to view previous match results."
         : "No previous results available in this league filter.";
     const prevListHtml = previousMatches.length
-      ? previousMatches.map((m) => renderMatchRow(m, featured && m.id === featured.id)).join("")
+      ? previousMatches.slice(0, 45).map((m) => renderMatchRow(m, featured && m.id === featured.id)).join("")
       : `<div class="empty-state is-compact">${prevEmptyText}</div>`;
 
     container.innerHTML = `
@@ -247,7 +252,7 @@
 
         <div class="match-split-box">
           <div class="match-split-header">
-            <span class="match-split-title is-prev-title">Previous Matches</span>
+            <span class="match-split-title is-prev-title">Previous</span>
             <span class="match-split-count tabular">${previousMatches.length}</span>
           </div>
           <div class="match-split-list">${prevListHtml}</div>

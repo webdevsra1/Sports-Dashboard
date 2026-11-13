@@ -21,9 +21,14 @@ $MimeTypes = @{
 }
 
 $AllowedSoccerLeagues = @(
-    "eng.1", "uefa.nations", "uefa.champions", "uefa.europa", "uefa.europa.conf",
-    "esp.1", "ita.1", "ger.1", "fra.1", "usa.1",
-    "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.friendly", "concacaf.nations", "all"
+    "uefa.nations", "concacaf.nations.league",
+    "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.worldq.concacaf",
+    "fifa.worldq.afc", "fifa.worldq.caf", "fifa.worldq.ofc",
+    "uefa.euro", "uefa.euroq", "conmebol.america", "concacaf.gold",
+    "caf.nations", "caf.nations_qual", "afc.asian.cup", "afc.cupq", "fifa.friendly",
+    "uefa.champions", "uefa.europa", "uefa.europa.conf",
+    "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ind.1",
+    "all"
 )
 
 $AllowedOpenF1Resources = @(
@@ -106,13 +111,13 @@ function Resolve-UpstreamTarget {
     if ($Path -eq "/api/espn/soccer/news") {
         return @{ url = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/news?limit=10"; mime = "application/json; charset=utf-8" }
     }
-    if ($Path -match "^/api/espn/soccer/([a-z0-9.]+)$") {
+    if ($Path -match "^/api/espn/soccer/([a-z0-9._]+)$") {
         $lg = $Matches[1]
         if ($AllowedSoccerLeagues -contains $lg) {
             return @{ url = "https://site.api.espn.com/apis/site/v2/sports/soccer/$lg/scoreboard$dateQuery"; mime = "application/json; charset=utf-8" }
         }
     }
-    if ($Path -match "^/api/espn/soccer/([a-z0-9.]+)/summary$") {
+    if ($Path -match "^/api/espn/soccer/([a-z0-9._]+)/summary$") {
         $lg = $Matches[1]
         $ev = $Query["event"]
         if (($AllowedSoccerLeagues -contains $lg) -and ($ev -match "^\d+$")) {

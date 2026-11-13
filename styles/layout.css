@@ -297,7 +297,7 @@ body {
 
 @media (min-width: 1200px) {
   .dashboard-main {
-    grid-template-columns: minmax(340px, 1.12fr) minmax(440px, 1.44fr) minmax(330px, 0.94fr);
+    grid-template-columns: minmax(390px, 1.32fr) minmax(410px, 1.38fr) minmax(320px, 0.90fr);
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
@@ -449,6 +449,14 @@ body {
     overflow: hidden;
   }
 
+  .dashboard-main:not(.focus-single) .panel-football .football-hero-card {
+    max-height: 41%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 12px;
+    gap: 7px;
+  }
+
   .dashboard-main:not(.focus-single) .panel-cricket .cricket-hero {
     max-height: 41%;
     overflow-y: auto;
@@ -464,6 +472,7 @@ body {
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .dashboard-main:not(.focus-single) .panel-football .matches-split-sections,
   .dashboard-main:not(.focus-single) .panel-cricket .matches-split-sections {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: minmax(0, 1fr);
@@ -476,6 +485,7 @@ body {
     overflow: hidden;
   }
 
+  .dashboard-main:not(.focus-single) .panel-football .match-split-box,
   .dashboard-main:not(.focus-single) .panel-cricket .match-split-box {
     padding: 8px;
     gap: 6px;

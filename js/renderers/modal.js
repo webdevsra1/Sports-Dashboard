@@ -387,6 +387,8 @@
     return labels[Number(num)] || `Innings ${num}`;
   }
 
+  let activeCricketMatchFormat = "";
+
   function registerCricketPlayerHint(player, teamName, seriesName, extraMatchStats) {
     return registerModalPlayer({
       sport: "cricket",
@@ -394,6 +396,7 @@
       name: (player && player.name) || "Player",
       team: teamName || "",
       series: seriesName || "",
+      format: activeCricketMatchFormat || "",
       role: (player && player.role) || "",
       isCaptain: Boolean(player && player.captain),
       isKeeper: Boolean(player && player.keeper),
@@ -783,6 +786,7 @@
 
   function renderCricketModal(match, ui) {
     activeModalPlayers.clear();
+    activeCricketMatchFormat = (match && match.format) || "";
     const { escapeHtml, renderStatusBadge } = Apex.utils;
     const safeUrl =
       match.externalUrl && /^https?:\/\//i.test(match.externalUrl) ? match.externalUrl : "";
@@ -1325,12 +1329,31 @@
     };
   }
 
-  function formatIccRankCellHtml(cell) {
+  function formatIccStatusCellHtml(st) {
+    const { escapeHtml } = Apex.utils;
+    const s = st || { state: "unknown", label: "—" };
+    const cls =
+      s.state === "ranked"
+        ? "is-ranked"
+        : s.state === "retired"
+          ? "is-retired"
+          : s.state === "unranked"
+            ? "is-unranked"
+            : "is-inactive";
+    return `<td class="player-rank-cell"><span class="player-fmt-badge ${cls}">${escapeHtml(s.label)}</span></td>`;
+  }
+
+  function formatIccRankCellHtml(cell, fmtStatus) {
     const { escapeHtml } = Apex.utils;
     if (!cell || (!cell.rank && !cell.best)) {
       return `<td class="player-rank-cell is-empty">—</td>`;
     }
-    const rankTxt = cell.rank ? `#${escapeHtml(cell.rank)}` : "—";
+    const isRet = fmtStatus && fmtStatus.state === "retired";
+    const rankTxt = cell.rank
+      ? `#${escapeHtml(cell.rank)}`
+      : isRet
+        ? `<span class="player-rank-status is-retired">Retired</span>`
+        : `<span class="player-rank-status">Unranked</span>`;
     const subParts = [];
     if (cell.rating) subParts.push(`${escapeHtml(cell.rating)} pts`);
     if (!cell.rank && cell.best) subParts.push(`Best #${escapeHtml(cell.best)}`);
@@ -1345,7 +1368,7 @@
   function renderCricketCareerMatrixHtml(title, table) {
     const { escapeHtml } = Apex.utils;
     if (!table || !table.formats || !table.rows) return "";
-    const wanted = new Set(["Matches", "Innings", "Runs", "Highest", "Average", "SR", "100s", "50s", "Wickets", "Avg", "Eco", "BBI", "4w", "5w"]);
+    const wanted = new Set(["Matches", "Innings", "Runs", "Highest", "Average", "SR", "100s", "50s", "100s/50s", "Balls", "Wickets", "Avg", "Eco", "BBI", "4w", "5w"]);
     const filteredRows = table.rows.filter((r) => wanted.has(r.label));
     const displayRows = filteredRows.length ? filteredRows : table.rows.slice(0, 7);
 
@@ -1503,9 +1526,7 @@
   function renderCricketProfileBody(p) {
     const { escapeHtml } = Apex.utils;
     const ranks = p.iccRankings || { batting: {}, bowling: {}, allRounder: {} };
-    const hasAnyRank = ["batting", "bowling", "allRounder"].some((cat) =>
-      ["test", "odi", "t20"].some((fmt) => ranks[cat] && ranks[cat][fmt] && (ranks[cat][fmt].rank || ranks[cat][fmt].best))
-    );
+    const fStat = p.formatStatus || {};
     const ms = p.matchStats || {};
 
     const matchPerfRows = [];
@@ -1523,6 +1544,7 @@
         <div class="player-hero-info">
           <div class="player-hero-tags">
             <span class="player-role-pill">${escapeHtml(p.role || "Cricketer")}</span>
+            ${p.iplTeam ? `<span class="player-ipl-pill">IPL: ${escapeHtml(p.iplTeam)}</span>` : ""}
             <span class="player-age-pill tabular">Age: ${escapeHtml(p.age)}</span>
           </div>
           <div class="player-hero-name">${escapeHtml(p.fullName || p.name)}</div>
@@ -1539,44 +1561,51 @@
       </div>
 
       <div class="player-card-section">
-        <div class="player-section-title">ICC World Rankings</div>
+        <div class="player-section-title">ICC World Rankings &amp; Format Status</div>
+        <div class="cr-table-scroll">
+          <table class="player-rank-table">
+            <thead>
+              <tr>
+                <th class="is-left">Category</th>
+                <th>Test</th>
+                <th>ODI</th>
+                <th>T20I</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="is-left player-metric-lbl">Status</td>
+                ${formatIccStatusCellHtml(fStat.test)}
+                ${formatIccStatusCellHtml(fStat.odi)}
+                ${formatIccStatusCellHtml(fStat.t20)}
+              </tr>
+              <tr>
+                <td class="is-left player-metric-lbl">Batting</td>
+                ${formatIccRankCellHtml(ranks.batting.test, fStat.test)}
+                ${formatIccRankCellHtml(ranks.batting.odi, fStat.odi)}
+                ${formatIccRankCellHtml(ranks.batting.t20, fStat.t20)}
+              </tr>
+              <tr>
+                <td class="is-left player-metric-lbl">Bowling</td>
+                ${formatIccRankCellHtml(ranks.bowling.test, fStat.test)}
+                ${formatIccRankCellHtml(ranks.bowling.odi, fStat.odi)}
+                ${formatIccRankCellHtml(ranks.bowling.t20, fStat.t20)}
+              </tr>
+              <tr>
+                <td class="is-left player-metric-lbl">All-Rounder</td>
+                ${formatIccRankCellHtml(ranks.allRounder.test, fStat.test)}
+                ${formatIccRankCellHtml(ranks.allRounder.odi, fStat.odi)}
+                ${formatIccRankCellHtml(ranks.allRounder.t20, fStat.t20)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
         ${
-          hasAnyRank
-            ? `
-          <div class="cr-table-scroll">
-            <table class="player-rank-table">
-              <thead>
-                <tr>
-                  <th class="is-left">Discipline</th>
-                  <th>Test</th>
-                  <th>ODI</th>
-                  <th>T20I</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="is-left player-metric-lbl">Batting</td>
-                  ${formatIccRankCellHtml(ranks.batting.test)}
-                  ${formatIccRankCellHtml(ranks.batting.odi)}
-                  ${formatIccRankCellHtml(ranks.batting.t20)}
-                </tr>
-                <tr>
-                  <td class="is-left player-metric-lbl">Bowling</td>
-                  ${formatIccRankCellHtml(ranks.bowling.test)}
-                  ${formatIccRankCellHtml(ranks.bowling.odi)}
-                  ${formatIccRankCellHtml(ranks.bowling.t20)}
-                </tr>
-                <tr>
-                  <td class="is-left player-metric-lbl">All-Rounder</td>
-                  ${formatIccRankCellHtml(ranks.allRounder.test)}
-                  ${formatIccRankCellHtml(ranks.allRounder.odi)}
-                  ${formatIccRankCellHtml(ranks.allRounder.t20)}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        `
-            : `<div class="player-muted-note">Not currently listed in live ICC Men's / Women's Top Rankings tables.</div>`
+          p.rankingsScope === "top10"
+            ? `<div class="player-muted-note">Showing live ICC Top 10 rankings per format (run local proxy to include positions #11–100 &amp; career-best ranks).</div>`
+            : p.rankingsScope === "none"
+              ? `<div class="player-muted-note">Live ICC rankings feed could not be reached in this session.</div>`
+              : ""
         }
       </div>
 

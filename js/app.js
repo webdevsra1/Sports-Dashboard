@@ -396,22 +396,19 @@
       const crDetailsBtn = target.closest(".cr-mini-details-btn");
       if (crDetailsBtn) {
         e.stopPropagation();
-        openAndEnrichModal("cricket", crDetailsBtn.dataset.id);
+        const matchId = crDetailsBtn.dataset.id;
+        ui.featuredCricketId = matchId;
+        Apex.renderers.renderCricketPanel(state, ui);
+        openAndEnrichModal("cricket", matchId);
         return;
       }
 
       const selectCr = target.closest("[data-select-cricket]");
       if (selectCr) {
-        ui.featuredCricketId = selectCr.dataset.selectCricket;
+        const matchId = selectCr.dataset.selectCricket;
+        ui.featuredCricketId = matchId;
         Apex.renderers.renderCricketPanel(state, ui);
-        const focusedCr = (state.cricket || []).find((m) => m.id === ui.featuredCricketId);
-        if (focusedCr && !focusedCr._summaryEnriched && focusedCr.leagueId && focusedCr.rawEventId) {
-          Apex.liveFeed.fetchCricketMatchSummary(focusedCr).then((res) => {
-            if (res && ui.featuredCricketId === focusedCr.id) {
-              Apex.renderers.renderCricketPanel(state, ui);
-            }
-          });
-        }
+        openAndEnrichModal("cricket", matchId);
         return;
       }
 
