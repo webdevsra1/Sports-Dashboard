@@ -335,7 +335,7 @@
         ${
           match.stats
             ? `
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-family:var(--font-mono);font-size:11px;">
+          <div class="fb-modal-stats-row">
             <div class="timeline-item" style="justify-content:space-between;"><span>Possession</span><strong>${escapeHtml(match.stats.possession[0])}% - ${escapeHtml(match.stats.possession[1])}%</strong></div>
             <div class="timeline-item" style="justify-content:space-between;"><span>On Target</span><strong>${escapeHtml(match.stats.shotsOnTarget[0])} - ${escapeHtml(match.stats.shotsOnTarget[1])}</strong></div>
             <div class="timeline-item" style="justify-content:space-between;"><span>Shots</span><strong>${escapeHtml((match.stats.totalShots && match.stats.totalShots[0]) || 0)} - ${escapeHtml((match.stats.totalShots && match.stats.totalShots[1]) || 0)}</strong></div>
@@ -1729,7 +1729,7 @@
 
     titleEl.textContent = "Sports Dashboard — Live Feed Diagnostics & Settings";
     bodyEl.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+      <div class="settings-status-grid">
         <div class="timeline-item"><strong>Local Proxy:</strong>&nbsp;<span>${report.proxy ? "Connected (127.0.0.1)" : "Not active (direct browser fetch)"}</span></div>
         <div class="timeline-item"><strong>Football Feed:</strong>&nbsp;<span>${escapeHtml(report.footballSource)}</span></div>
         <div class="timeline-item"><strong>Cricket Feed:</strong>&nbsp;<span>${escapeHtml(report.cricketSource)}</span></div>

@@ -8,7 +8,7 @@
             "type": "chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",
-            "url": "http://localhost:8080",
+            "url": "file:///C:/Users/ssuresh/OneDrive%20-%20Edmonton%20Regional%20Airports%20Authority/Developer/Sports-Dashboard/index.html",
             "webRoot": "${workspaceFolder}"
         }
     ]
